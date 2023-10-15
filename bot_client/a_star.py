@@ -1,4 +1,5 @@
 from gameState import GameState
+import math
 
 def get_neighbors(g: GameState):
     pacman_loc = g.pacmanLoc
@@ -12,4 +13,10 @@ def get_neighbors(g: GameState):
         dirs.append(((y,x+1),'d'))
     if not g.wallAt(y,x-1):
         dirs.append(((y,x-1),'a'))
-    print(dirs)
+    print(dirs)import math
+
+def get_distance(posA, posB):
+    dx = posB[0] - posA[0]
+    dy = posB[1] - posA[1]
+    dist = math.sqrt(dx * dx + dy * dy)
+    return dist
