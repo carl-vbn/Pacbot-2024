@@ -13,7 +13,7 @@ def get_neighbors(g: GameState):
         dirs.append(((y,x+1),'d'))
     if not g.wallAt(y,x-1):
         dirs.append(((y,x-1),'a'))
-    print(dirs)import math
+    print(dirs)
 
 def get_distance(posA, posB):
     dx = posB[0] - posA[0]
