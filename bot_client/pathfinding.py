@@ -38,27 +38,43 @@ def get_walkable_tiles(g: GameState):
 				walkable_cells.add((row, col))
 	return walkable_cells
 
+def nearby_super_pellet_bonus(g: GameState, location):
+    row,col = location if type(location) == tuple else (location.row, location.col)
+    super_pellet_locations = [(3, 1), (3, 26), (23, 1), (23, 26)]
+    bonus = 0
+    for super_pellet_location in super_pellet_locations:
+        if g.pelletAt(super_pellet_location[0], super_pellet_location[1]): # super pellet may have been eaten
+            # the closer we are to the super pellet, the higher the bonus
+            dist = get_distance(location, super_pellet_location)
+            if dist < 10:
+                bonus += 150 / dist
+    return bonus
+
 def build_cell_avoidance_map(g: GameState):
     cell_avoidance_map = {}
 
-    ghost_positions = list(map(lambda ghost: (ghost.location.row, ghost.location.col), g.ghosts))
-
     for tile in get_walkable_tiles(g):
-        ghost_proximity = 0
-        for ghost_pos in ghost_positions:
-            dist = get_distance(tile, ghost_pos)
+        total_ghost_proximity = 0
+        for ghost in g.ghosts:
+            dist = get_distance(tile, (ghost.location.row, ghost.location.col))
             if dist == 0:
-                ghost_proximity += 1000
+                ghost_proximity = 1000
             else:
-                ghost_proximity += 1 / dist * 500
-
+                ghost_proximity = 750 / dist
+            if ghost.isFrightened():
+                ghost_proximity = -ghost_proximity*2
+            if ghost.spawning:
+                ghost_proximity /= 10
+            total_ghost_proximity += ghost_proximity
         pellet_boost = 0
         if g.pelletAt(tile[0], tile[1]):
             pellet_boost = 50
         if g.superPelletAt(tile[0], tile[1]):
-            pellet_boost = 200
+            pellet_boost = 250
+        else:
+            pellet_boost += nearby_super_pellet_bonus(g, tile)
 
-        cell_avoidance_map[tile] = ghost_proximity - pellet_boost
+        cell_avoidance_map[tile] = total_ghost_proximity - pellet_boost
 
     return cell_avoidance_map
 
