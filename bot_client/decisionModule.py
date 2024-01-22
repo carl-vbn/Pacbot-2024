@@ -114,7 +114,7 @@ class DecisionModule:
 				# Update our position on the server.
 				# In the future, this needs to be replaced by a call to the low level movement code
 				self.state.queueAction(1, direction)
-				await asyncio.sleep(0.5)
+				await asyncio.sleep(0.25)
 				
 
 			# Unlock the game state
