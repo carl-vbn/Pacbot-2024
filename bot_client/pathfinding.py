@@ -80,8 +80,14 @@ def build_cell_avoidance_map(g: GameState):
 
 def show_cell_avoidance_map(cell_avoidance_map):
     new_cell_colors = []
+    max_score = max(cell_avoidance_map.values())
+    min_score = min(cell_avoidance_map.values())
+    print(max_score, min_score)
     for cell, score in cell_avoidance_map.items():
-        score = min(max(-255, score), 255)
+        if score > 0:
+            score = score / max_score * 255
+        else:
+            score = -(score / min_score * 255)
         color = (score, 0, 0) if score > 0 else (0, -score, 0)
         new_cell_colors.append((cell, color))
 
