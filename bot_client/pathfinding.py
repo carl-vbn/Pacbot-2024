@@ -72,7 +72,7 @@ def build_cell_avoidance_map(g: GameState):
 
     return cell_avoidance_map
 
-def show_cell_avoidance_map(cell_avoidance_map):
+def show_cell_avoidance_map(cell_avoidance_map): # this shows the path it wants to take in game
     new_cell_colors = []
     for cell, score in cell_avoidance_map.items():
         score = min(max(-255, score), 255)
@@ -123,8 +123,15 @@ def find_path(start, target, g: GameState):
                 f_map[neighbor] = tentative_gScore + estimate_heuristic(neighbor, target, cell_avoidance_map)
                 open_nodes.add(neighbor)
 
+        # print(open_nodes) # open tile positions?
+        
+        # print the first two values in the f-map, to analyze the case in which it's stuck
+        print("--- F-MAP Values--- ")
+        print(f_map)
+
     return None
 
+# this is not used because pathfinding.py is not used directly
 if __name__ == '__main__':
     g = GameState()
 

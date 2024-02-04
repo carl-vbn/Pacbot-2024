@@ -64,10 +64,13 @@ class DecisionModule:
 				max_dist_point = pos
 
 		path = find_path(pacmanPos, max_dist_point, self.state)
+
+		print(path[0]) # print the first node on the path (which is where it plans to go)
+
 		DebugServer.instance.set_path(path)
 	
 		if len(path) > 1:
-			self.targetPos = path[0]
+			self.targetPos = path[0] # just the closest / first node in path
 		
 
 	async def decisionLoop(self) -> None:
