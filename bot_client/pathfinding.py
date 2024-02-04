@@ -6,6 +6,13 @@ def get_distance(posA, posB):
     rowA,colA = posA if type(posA) == tuple else (posA.row, posA.col)
     rowB,colB = posB if type(posB) == tuple else (posB.row, posB.col)
 
+    return abs(rowA - rowB) + abs(colA - colB) # trying manhattan instead of euclidean distance
+    # since pacbot is constrained to that movement
+    # may not work because less likely to be an underestimate of actual cost of path
+
+    # maybe try to adjust this so that it accounts for obstacles
+    # only issue is that it would run a separate pathfinding algo each time...
+
     drow = rowA - rowB
     dcol = colA - colB
     dist = math.sqrt(dcol * dcol + drow * drow)
@@ -38,7 +45,10 @@ def get_walkable_tiles(g: GameState):
 				walkable_cells.add((row, col))
 	return walkable_cells
 
+# adjust the values in this map -> impacts the path it choosees
 def build_cell_avoidance_map(g: GameState):
+    ghost_proximity_weight = 750 # previously 500
+
     cell_avoidance_map = {}
 
     ghost_positions = list(map(lambda ghost: (ghost.location.row, ghost.location.col), g.ghosts))
@@ -50,13 +60,13 @@ def build_cell_avoidance_map(g: GameState):
             if dist == 0:
                 ghost_proximity += 1000
             else:
-                ghost_proximity += 1 / dist * 500
+                ghost_proximity += 1 / dist * ghost_proximity_weight
 
         pellet_boost = 0
         if g.pelletAt(tile[0], tile[1]):
             pellet_boost = 50
         if g.superPelletAt(tile[0], tile[1]):
-            pellet_boost = 200
+            pellet_boost = 300 # 200 before
 
         cell_avoidance_map[tile] = ghost_proximity - pellet_boost
 
