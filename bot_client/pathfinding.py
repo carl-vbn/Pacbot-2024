@@ -126,7 +126,7 @@ def find_path(start, target, g: GameState):
         # print(open_nodes) # open tile positions?
         
         # print the first two values in the f-map, to analyze the case in which it's stuck
-        print("--- F-MAP Values--- ")
+        print("--- F-MAP Values!--- ")
         print(f_map)
 
     return None
