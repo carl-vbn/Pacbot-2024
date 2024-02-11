@@ -5,42 +5,57 @@ import pathfinding
 import numpy as np
 
 class RLLearn_SARAS():
-    def __init__(self, addr, port, training=False):
-        #training     - whetyer or not its training
-        self.training = training
-        # alpha       - learning rate
-        # epsilon     - exploration rate
-        # gamma       - discount factor
-        # numTraining - number of training episodes
+    def __init__(self, epsilon=0.05,gamma=0.8,alpha=0.2, numTraining=0):
 
-        # let's think about what Q, the 2D array of learned state-action values, should look like
-        # Pacman has 4 possible actions: up, down, left, right
+        # SARSA parameters for learning
+        # default values from: http://ai.berkeley.edu/projects/release/reinforcement/v1/001/docs/qlearningAgents.html
 
-        self.states = self.create_state_list()
-        # The state includes various information,
-        # such as the position of pacman, the position of the ghosts (or lack thereof, cuz they're dead),
-        # the position of pellets, the frightened state of the ghosts
+        self.alpha = alpha # learning rate
+        self.epsilon = epsilon # exploration rate
+        self.gamma = gamma # discount factor
+        self.numTraining = numTraining # number of training episodes, 0 for no training
 
-        # 28 * 36 = 1008 possible positions for pacman
-        # 28 * 36 * 2 + 1 = 2017 possible states for the ghosts (position, frightened, or dead)
-        # 28 * 36 = 1008 possible positions for each pellet
-        # add em all up: 1008 + 4*2017 + 1008 = 10084
-        # that's kind of a lot, maybe let's rethink the state space (after all, not all locations are reachable)
-
-        # reference: https://github.com/wrhlearner/PacBot-2023/blob/master/src/Pi/botCode/HighLevelMarkov.py
+        self.states = self.create_state_list() # state-action space
+        
+        # potentially helpful reference:
+        # https://github.com/wrhlearner/PacBot-2023/blob/master/src/Pi/botCode/HighLevelMarkov.py
 
 
-            
         # a dictionary for storing Q(s,a)
         # a list records last state
         # a list records last action
         # a variable stores the score before last action
 
     def create_state_list():
-        return []
-        #this function should calculate all the legal states on the board that the pacman can be in, 
-        #keeping in mind the 
-        #returns a list of states
+        """
+        This function calculates all possible states,
+        based on Pacman's position, the ghosts' positions, 
+        the frightened state of the ghosts, whether the ghosts are alive, and the position of the pellets.
+
+        Many states are inacessible, Pacman, pellets, and ghosts can't be in walls,
+        but we can ignore that for now.
+
+        28 * 31 (dimension of arena) = 868 possible positions for pacman.
+        4*(28 * 31 * 2 + 1) = 6948 possible states for the 4 ghosts (position, frightened, or dead).
+        28 * 31 = 868 possible positions for each pellet.
+        add em all up: 868 + 6948 + 868 = 8684.
+
+        Oh wait, these should actually be multiplied by one another...
+        868 * 6948 * 868 = 5,234,789,952 possible states.
+
+        Hmm, how about we only consider valid positions (aka. excluding walls)?
+        There are 288 valid positions, so...
+        288 * (4*(288*2+1)) * 288 = 191,434,752.
+
+        Thus, 191,434,752 possible states, with 4 possible actions (up, down, left, right).
+
+        We obviously can't store all of these in memory, so we need a less naive paradigm...
+
+        Seems like the better approach is to use a CNN:
+        https://cs229.stanford.edu/proj2017/final-reports/5241109.pdf
+        """
+
+        return np.full((191434752, 4), 0.5)
     
     def q_mapper(GameState):
         # figure out where a state is in the Q table
