@@ -37,17 +37,17 @@ class RLLearn_SARAS():
 
         28 * 31 (dimension of arena) = 868 possible positions for pacman.
         4*(28 * 31 * 2 + 1) = 6948 possible states for the 4 ghosts (position, frightened, or dead).
-        28 * 31 = 868 possible positions for each pellet.
-        add em all up: 868 + 6948 + 868 = 8684.
+        28 * 31 * 2 = 1736 possibilities (pellet or no pelllet at each position).
+        add em all up: 868 + 6948 + 1736 = 9552.
 
         Oh wait, these should actually be multiplied by one another...
-        868 * 6948 * 868 = 5,234,789,952 possible states.
+        868 * 6948 * 1736 = 10,469,579,904 possible states.
 
         Hmm, how about we only consider valid positions (aka. excluding walls)?
         There are 288 valid positions, so...
-        288 * (4*(288*2+1)) * 288 = 191,434,752.
+        288 * (4*(288*2+1)) * (288 * 2) = 382,869,504.
 
-        Thus, 191,434,752 possible states, with 4 possible actions (up, down, left, right).
+        Thus, 382,869,504 possible states, with 4 possible actions (up, down, left, right).
 
         We obviously can't store all of these in memory, so we need a less naive paradigm...
 
@@ -55,7 +55,7 @@ class RLLearn_SARAS():
         https://cs229.stanford.edu/proj2017/final-reports/5241109.pdf
         """
 
-        return np.full((191434752, 4), 0.5)
+        return np.full((382869504, 4), 0.5)
     
     def q_mapper(GameState):
         # figure out where a state is in the Q table
