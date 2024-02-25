@@ -3,97 +3,102 @@ from gameState import GameState
 from debugServer import DebugServer
 import pathfinding
 import numpy as np
+import numpy as np
 
 class RLLearn_SARAS():
-    def __init__(self, addr, port):
-        # self.subscriptions = [MsgType.LIGHT_STATE]
-        # super().__init__(addr, port, message_buffers, MsgType, FREQUENCY, self.subscriptions)
-        # self.state = None
-        # self.grid = copy.deepcopy(grid)
+    def __init__(self, addr, port, training=False):
+        #training     - whetyer or not its training
+        self.training = training
+        # alpha       - learning rate
+        # epsilon     - exploration rate
+        # gamma       - discount factor
+        # numTraining - number of training episodes
 
-        # self.policy = np.zeros((grid.shape, 4))
-        # self.lr = 0.01
-        # self.min_lr = 0.001
-        # self.lr_decay = 0.99
-        # self.gamma = 1
-        # self.eps = 0.1
-        # self.eps_decay = 0.999
-        # self.min_eps = 0.001
-        # self.Q = np.zeros() # the policy
-        # self.gamma = 0
-        # self.alpha = 0
-        pass
+        # let's think about what Q, the 2D array of learned state-action values, should look like
+        # Pacman has 4 possible actions: up, down, left, right
+
+        self.states = self.create_state_list()
+        # The state includes various information,
+        # such as the position of pacman, the position of the ghosts (or lack thereof, cuz they're dead),
+        # the position of pellets, the frightened state of the ghosts
+
+        # 28 * 36 = 1008 possible positions for pacman
+        # 28 * 36 * 2 + 1 = 2017 possible states for the ghosts (position, frightened, or dead)
+        # 28 * 36 = 1008 possible positions for each pellet
+        # add em all up: 1008 + 4*2017 + 1008 = 10084
+        # that's kind of a lot, maybe let's rethink the state space (after all, not all locations are reachable)
+
+        # reference: https://github.com/wrhlearner/PacBot-2023/blob/master/src/Pi/botCode/HighLevelMarkov.py
 
 
-    def update_game_state(self):
-        pass
+            
+        # a dictionary for storing Q(s,a)
+        # a list records last state
+        # a list records last action
+        # a variable stores the score before last action
 
-    def get_reward(self):
-        done = self.is_done() #return true if eaten all coins
-        dead = self.is_dead()
-        pass
-
-    def get_action_greedy(self, state):
-        action = 0
-        return action
+    def create_state_list():
+        return []
+        #this function should calculate all the legal states on the board that the pacman can be in, 
+        #keeping in mind the 
+        #returns a list of states
     
-    def update_Q(self):
-        pass
-    
-    def is_done(self):
-        pass
-    
-    def is_dead(self, state):
-        pass
+    def q_mapper(GameState):
+        # figure out where a state is in the Q table
+        #returns a dictionary mapping rewards to each state
+        return
 
-    #Function to learn the Q-value 
-    # source: https://www.geeksforgeeks.org/sarsa-reinforcement-learning/
-    def update(self, state, state2, reward, action, action2):
-        predict = self.Q[state, action]
-        target = reward + self.gamma * Q[state2, action2]
-        self.Q[state, action] = self.Q[state, action] + self.alpha * (target - predict)
     
-    def step(self, current_state, current_action):
-        # Updating the new state, the reward for the step, whether pacman is done or not
-        # perform the action a to get to the next state (s')
-        new_state = self.update_game_state(current_state, current_action) # s'
-
-        # get reward (r) for moving to the next state (s')
-        reward = self.get_reward(current_state, current_action, new_state)
+    def stepping(state, action):
+        #Updating the new state, the reward for the step, whether pacman is done or not
+        #should call 
+        next_state = state
+        reward = 0
+        done = False
+        return next_state, reward, done
+    
+    def get_possible_actions(state):
+        #given a state, return a list of possible states
+        return
+    
+    def get_action_random():
+        #returns a random action from the state space
+        return
         
-        # get action_greedy a' based on the next state s'
-        action_greedy = self.get_action_greedy(new_state) # a'
+    def get_action_greedy():
+        return
         
-        # find Q(s', a')
-        self.update_Q(new_state, action_greedy)
-
-        return new_state, action_greedy, reward
-    
-    def train(self, initial_state, initial_action):
-        current_state = initial_state
-        current_action = initial_action
-        # call step unless is done or is dead
-        while not (self.is_done() or self.is_dead()):
-            new_state, action_greedy, reward = self.step(current_state, current_action)
-            current_state = new_state
-            current_action = action_greedy
-    
-    def get_action_epsilon(self, state):
-        # will call get action random or get action greedy depending on epsilon
-        action = 0
-        if np.random.uniform(0, 1) < self.eps:
-            action = self.get_action_random()
-        else:
-            action = self.get_action_greedy()
-        return action
+    def get_action_epsilon():
+        return
     
     def calculate_reward(state1, state2, action):
+        #takes a board state, the next state and the action and calculates the ending rewards 
         return 0
     
     def action_to_command():
         return
     
-    def evaluate():
+    def train(train=True):
+        
+        # initialize Q(s,a)
+        # take a random action
+        # update Q(s,a)
+        # choose the action maximises Q or a random action according to Ɛ-greedy function
+        # repeat step 3 and 4 until the game ends
+        # update Q(s,a) where s is the last state before the end, a is the last action taken
+        #when you are at the last state, print out the statistics -> call evaluate()
+        #if train is False, do not ever do e greedy, always choose the greedy actions
+
+        return
+
+    def evaluate(max_steps, episodes, train=True):
+        #print out the average reward, what is the average reward for the episdoes, 
+        #how many episdoes sucess, how many died
+        #how many steps before death on average (maybe print the whole array)
+        return  
+
+    def update_values():
+        #every time an episode ends, what is
         return
 
     
