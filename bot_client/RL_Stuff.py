@@ -3,6 +3,7 @@ from gameState import GameState
 from debugServer import DebugServer
 import pathfinding
 import numpy as np
+import numpy as np
 
 class RLLearn_SARAS():
     def __init__(self, addr, port, training=False):
