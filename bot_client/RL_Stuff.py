@@ -6,70 +6,100 @@ import numpy as np
 import numpy as np
 
 class RLLearn_SARAS():
-    def __init__(self, addr, port, training=False):
-        #training     - whetyer or not its training
-        self.training = training
-        # alpha       - learning rate
-        # epsilon     - exploration rate
-        # gamma       - discount factor
-        # numTraining - number of training episodes
+    def __init__(self, addr, port):
+        self.subscriptions = [MsgType.LIGHT_STATE]
+        super().__init__(addr, port, message_buffers, MsgType, FREQUENCY, self.subscriptions)
+        self.state = None
+        self.grid = copy.deepcopy(grid)
 
-        # let's think about what Q, the 2D array of learned state-action values, should look like
-        # Pacman has 4 possible actions: up, down, left, right
-
-        self.states = self.create_state_list()
-        # The state includes various information,
-        # such as the position of pacman, the position of the ghosts (or lack thereof, cuz they're dead),
-        # the position of pellets, the frightened state of the ghosts
-
-        # 28 * 36 = 1008 possible positions for pacman
-        # 28 * 36 * 2 + 1 = 2017 possible states for the ghosts (position, frightened, or dead)
-        # 28 * 36 = 1008 possible positions for each pellet
-        # add em all up: 1008 + 4*2017 + 1008 = 10084
-        # that's kind of a lot, maybe let's rethink the state space (after all, not all locations are reachable)
-
-        # reference: https://github.com/wrhlearner/PacBot-2023/blob/master/src/Pi/botCode/HighLevelMarkov.py
-
-
-            
-        # a dictionary for storing Q(s,a)
-        # a list records last state
-        # a list records last action
-        # a variable stores the score before last action
-
-    def create_state_list():
-        return []
-        #this function should calculate all the legal states on the board that the pacman can be in, 
-        #keeping in mind the 
-        #returns a list of states
-    
-    def q_mapper(GameState):
-        # figure out where a state is in the Q table
-        #returns a dictionary mapping rewards to each state
+        self.policy = np.zeros((grid.shape, 4))
+        self.lr = 0.01
+        self.min_lr = 0.001
+        self.lr_decay = 0.99
+        self.gamma = 1
+        self.eps = 0.1
+        self.eps_decay = 0.999
+        self.min_eps = 0.001
+        self.Q = np.zeros() # the policy
+        self.gamma = 0
+        self.alpha = 0
         return
 
+    def is_done(self):
+        done = True
+        for i in self.grid.shape[0]:
+            for j in self.grid.shape[1]:
+                if self.grid[i][j] in [o, O]:
+                    done = False
+        return done
     
-    def stepping(state, action):
+    def is_dead(self, state):
+        return self.grid[state[0]][state[1]]
+    
+    #Function to learn the Q-value 
+    # source: https://www.geeksforgeeks.org/sarsa-reinforcement-learning/
+    def update(self, state, state2, reward, action, action2):
+        predict = self.Q[state, action]
+        target = reward + self.gamma * Q[state2, action2]
+        self.Q[state, action] = self.Q[state, action] + self.alpha * (target - predict)
+    
+    def stepping(self, past_state, past_action):
         #Updating the new state, the reward for the step, whether pacman is done or not
-        #should call 
-        next_state = state
-        reward = 0
-        done = False
-        return next_state, reward, done
-    
-    def get_possible_actions(state):
-        #given a state, return a list of possible states
-        return
+        
+        ## OLD CODE
+        
+        state = past_state
+        eat_pellet = False
+        if self.state and self.state.mode == LightState.RUNNING:
+            state = (self.state.pacman.x, self.state.pacman.y)
+
+        # update game state, we have eaten the little thing good for us
+        if self.grid[state[0]][state[1]] in [o, O]:
+            self.grid[state[0]][state[1]] = e
+            eat_pellet = True
+        
+        
+        ## GET THE NEXT ACTION BASED ON EPSILON
+        action = self.get_action_epsilon(state, False)
+        print(action) #action is equivilant of path[1], it should be of the form,
+        command = self.action_to_command(action)
+        print(command)
+
+        done = self.is_done() #return true if eaten all coins
+        dead = self.is_dead()
+        reward = self.get_reward(action, state, done, past_action, eat_pellet, dead, past_state)
+       
+        if action != None:
+            # Figure out position we need to move
+            new_msg = PacmanCommand()
+            new_msg.dir = self._get_direction(state, action)
+            self.write(new_msg.SerializeToString(), MsgType.PACMAN_COMMAND)
+            return
+
+        new_msg = PacmanCommand()
+        new_msg.dir = PacmanCommand.STOP
+        self.write(new_msg.SerializeToString(), MsgType.PACMAN_COMMAND)
+
+
+
+        return self.get_next_state(action), reward, done, dead
     
     def get_action_random():
-        #returns a random action from the state space
         return
         
     def get_action_greedy():
         return
         
-    def get_action_epsilon():
-        return
+    def get_action_epsilon(self, state):
+        # will call get action random or get action greedy depending on epsilon
+        action = 0
+        if np.random.uniform(0, 1) < self.eps:
+            action = self.get_action_random()
+        else:
+            action = self.get_action_greedy()
+        return action
+
+
     
     def calculate_reward(state1, state2, action):
         #takes a board state, the next state and the action and calculates the ending rewards 
