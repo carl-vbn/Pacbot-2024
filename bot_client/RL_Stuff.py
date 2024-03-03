@@ -29,7 +29,7 @@ class RLLearn_SARAS():
 
         # reference: https://github.com/wrhlearner/PacBot-2023/blob/master/src/Pi/botCode/HighLevelMarkov.py
 
-
+        # 
             
         # a dictionary for storing Q(s,a)
         # a list records last state
@@ -42,6 +42,8 @@ class RLLearn_SARAS():
         #keeping in mind the 
         #returns a list of states
     
+    # MINE
+    # 10084, 4
     def q_mapper(GameState):
         # figure out where a state is in the Q table
         #returns a dictionary mapping rewards to each state
