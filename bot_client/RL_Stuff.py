@@ -13,6 +13,8 @@ class RLLearn_SARAS():
         # gamma       - discount factor
         # numTraining - number of training episodes
 
+        
+
         # let's think about what Q, the 2D array of learned state-action values, should look like
         # Pacman has 4 possible actions: up, down, left, right
 
@@ -29,19 +31,25 @@ class RLLearn_SARAS():
 
         # reference: https://github.com/wrhlearner/PacBot-2023/blob/master/src/Pi/botCode/HighLevelMarkov.py
 
-
+        # 
             
         # a dictionary for storing Q(s,a)
         # a list records last state
         # a list records last action
         # a variable stores the score before last action
 
-    def create_state_list():
+    def create_state_list(self):
+        self.states = np.array([[1, 2], [3, 4]])
+
+        
+
         return []
         #this function should calculate all the legal states on the board that the pacman can be in, 
         #keeping in mind the 
         #returns a list of states
     
+    # MINE
+    # 10084, 4
     def q_mapper(GameState):
         # figure out where a state is in the Q table
         #returns a dictionary mapping rewards to each state
