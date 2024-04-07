@@ -95,6 +95,7 @@ class DecisionModule:
 			# Lock the game state
 			self.state.lock()
 
+			# PRINT CURRENT, TARGET VALUES
 			print(f"Current: {self.state.pacmanLoc.row}, {self.state.pacmanLoc.col}")
 			print(f"Target: {self.targetPos[0]}, {self.targetPos[1]}")
 
@@ -105,11 +106,11 @@ class DecisionModule:
 
 			# Perform the decision-making process
 			if absDelta != 1:
-				# If we're at the target location, or the target locatin is somehow unreachable from the current position,
-				# update the target location
+				# Not adjacent to the target position
+				# Recalculate the target + path
 				self.update_target_loc()
 			else:
-				# Otherwise, move towards the target location
+				# Otherwise, if we are, then just update on server?
 
 				# Get the direction to move in
 				direction = direction_from_delta(deltaRow, deltaCol)
