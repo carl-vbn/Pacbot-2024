@@ -13,7 +13,7 @@ from utils import get_distance, get_walkable_tiles
 from DistMatrix import createDistTable, createDistTableDict, loadDistTable, loadDistTableDict
 from pathfinding import find_path
 from AvoidanceMap import cellAvoidanceMap
-
+from GhostPrediction import GhostPrediction
 
 def direction_from_delta(deltaRow, deltaCol):
 	if deltaRow == 1:
@@ -54,6 +54,9 @@ class DecisionModule:
 		# Load DistTable and DistTableDict
 		self.distTable = loadDistTable()
 		self.dtDict = loadDistTableDict()
+
+		# Ghost prediction
+		self.ghostPrediction = GhostPrediction(self.state)
 
 	def update_target_loc(self):
 		'''
@@ -97,6 +100,9 @@ class DecisionModule:
 				max_dist_point = pos
 		path = find_path(pacmanPos, max_dist_point, self.state, self.avoidance_map)
 		"""
+
+		ghost_directions = GhostPrediction.getGhostDirection(self.ghostPrediction, self.state)
+		print(f"Ghost directions: {ghost_directions}")
 
 		# Testing new way: within X block radius, set target to cell with lowest score in avoidance map
 		self.avoidance_map.updateMap(self.state)
