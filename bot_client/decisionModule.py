@@ -12,6 +12,7 @@ from utils import get_distance, get_walkable_tiles
 from DistMatrix import createDistTable, createDistTableDict, loadDistTable, loadDistTableDict
 from pathfinding import find_path
 
+from collections import deque
 
 def direction_from_delta(deltaRow, deltaCol):
 	if deltaRow == 1:
@@ -42,6 +43,8 @@ class DecisionModule:
 
 		self.walkable_cells = get_walkable_tiles(state)
 
+		self.prev_cells = [] # queue to keep track of the previous cells
+
 		# If DistTable and DistTableDict don't exist, create them
 		if not os.path.isfile('./static/distTable.json'):
 			createDistTable(self.state)
@@ -52,7 +55,7 @@ class DecisionModule:
 		self.distTable = loadDistTable()
 		self.dtDict = loadDistTableDict()
 
-	def update_target_loc(self):
+	def update_target_loc(self, stuck=False): # optional param stuck, default is False
 		'''
 		Decide the direction to move in
 		'''
@@ -64,41 +67,34 @@ class DecisionModule:
 
 		ghost_locations = list(map(lambda ghost: ghost.location, self.state.ghosts))
 
-		# Find the point that is farthest from any ghost
+		# Find the point that is farthest from all the ghosts
 		max_dist = 0
 		max_dist_point = None
 
 		for pos in self.walkable_cells:
-			dist_to_closest_ghost = None
+			total_dist = 0
+
 			for ghost_loc in ghost_locations:
-				dist = get_distance(pos, (ghost_loc.row, ghost_loc.col))
-				# try:
-				# 	pos_idx = self.dtDict[pos]
-				# 	ghost_idx = self.dtDict[(ghost_loc.row, ghost_loc.col)]
-				# 	print(f'pos: {pos_idx}, ghost_pos: {ghost_idx}')
-				# 	print(type(pos_idx), type(ghost_idx))
-				# 	dist = self.distTable[pos_idx][ghost_idx]
-				# except IndexError:
-				# 	dist = get_distance(pos, (ghost_loc.row, ghost_loc.col))
-				# except KeyError:
-				# 	dist = get_distance(pos, (ghost_loc.row, ghost_loc.col))
+				ghost_dist = get_distance(pos, (ghost_loc.row, ghost_loc.col))
+				# make it a sum of the distance from the ghosts
+				total_dist += ghost_dist
 
-				if dist_to_closest_ghost is None or dist < dist_to_closest_ghost:
-					dist_to_closest_ghost = dist
-
-			if dist_to_closest_ghost > max_dist:
-				max_dist = dist_to_closest_ghost
+			if total_dist > max_dist:
+				max_dist = total_dist
 				max_dist_point = pos
 
 		path = find_path(pacmanPos, max_dist_point, self.state)
 
-		print(path[0]) # print the first node on the path (which is where it plans to go)
+		# print(path[0]) # print the first node on the path (which is where it plans to go)
 
 		DebugServer.instance.set_path(path)
 	
-		if len(path) > 1:
+		if len(path) >= 1:
 			self.targetPos = path[0] # just the closest / first node in path
 		
+		# otherwise, if len(path) = 0, does nothing
+		# print("PATTHHHHHHHH")
+		# print(len(path))
 
 	async def decisionLoop(self) -> None:
 		'''
@@ -123,8 +119,10 @@ class DecisionModule:
 			self.state.lock()
 
 			# PRINT CURRENT, TARGET VALUES
+			print()
 			print(f"Current: {self.state.pacmanLoc.row}, {self.state.pacmanLoc.col}")
 			print(f"Target: {self.targetPos[0]}, {self.targetPos[1]}")
+			print()
 
 			# Calculate the delta between the current position and the target position
 			deltaRow = self.targetPos[0] - self.state.pacmanLoc.row
@@ -133,11 +131,16 @@ class DecisionModule:
 
 			# Perform the decision-making process
 			if absDelta != 1:
-				# Not adjacent to the target position
-				# Recalculate the target + path
-				self.update_target_loc()
-			else:
-				# Otherwise, if we are, then just update on server?
+				# This means it has reached the target (because 0 away)
+				
+				self.update_target_loc() # Update target loc
+				self.prev_cells.append(1) # 1 means true, it is at the target loc
+			else: 
+				self.prev_cells.append(0)
+				# then close enough to the target location
+				# the issue is then it gets stuck here
+				# e.g. for bottom left corner, it's 1 away from target and so it just stops
+				print("TRIGGERED!")
 
 				# Get the direction to move in
 				direction = direction_from_delta(deltaRow, deltaCol)
@@ -146,8 +149,33 @@ class DecisionModule:
 				# In the future, this needs to be replaced by a call to the low level movement code
 				self.state.queueAction(1, direction)
 				await asyncio.sleep(0.5)
-				
+			
+			# check if stuck
+			# meaning it's been in the same location for past 3 iterations
 
+			if len(self.prev_cells) >= 3: # at least 3 iterations
+				
+				# in case we have more than 3 stored, need to restrict them
+				while len(self.prev_cells) > 3:
+					self.prev_cells.pop(0) # remove earlier iterations
+	
+				stuck = True
+				num_checked = 0
+
+				if num_checked < 3:
+					for is_stuck in self.prev_cells:
+						if is_stuck == 0:
+							stuck = False
+							break
+
+						num_checked = 1
+				
+				if stuck:
+					print("STUCK!!!!!! HELP ME PLEASE")
+					self.prev_cells = [] # clear the list
+
+					self.update_target_loc(stuck=True) # to force it to move, maybe pass in a param
+					
 			# Unlock the game state
 			self.state.unlock()
 

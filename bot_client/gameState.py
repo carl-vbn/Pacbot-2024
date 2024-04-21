@@ -203,6 +203,7 @@ class Ghost:
 		# Ghost information
 		self.color: GhostColors = color
 		self.location: Location = Location(state) # type: ignore
+		
 		self.frightSteps: int = 0
 		self.spawning: bool = bool(True)
 

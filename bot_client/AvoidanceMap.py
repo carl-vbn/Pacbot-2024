@@ -34,8 +34,10 @@ class cellAvoidanceMap:
         self.g = g
         self.avoidance_map = {}
 
-        print(self.dtDict)
-        print(type(self.dtDict))
+        # for debugging
+        
+        # print(self.dtDict)
+        # print(type(self.dtDict))
 
         # for ghost in self.g.ghosts:
         #     self.ghosts[ghost.color] = (ghost.location.row, ghost.location.col)
@@ -106,3 +108,7 @@ def show_cell_avoidance_map(cell_avoidance_map):
         new_cell_colors.append((cell, color))
 
     DebugServer.instance.set_cell_colors(new_cell_colors)
+
+def alpha_weighting(cell_avoidance_map):
+    self.avoidance_map
+    
