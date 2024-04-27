@@ -70,42 +70,29 @@ class DecisionModule:
 		if pacmanPos not in self.walkable_cells:
 			return # If Pacman is not in a walkable cell, don't update the target location
 
-		ghost_locations = list(map(lambda ghost: ghost.location, self.state.ghosts))
-
-		# Find the point that is farthest from any ghost
-		max_dist = 0
-		max_dist_point = None
-
-		""" Old way: furthest distance from closest ghost
-		for pos in self.walkable_cells:
-			dist_to_closest_ghost = None
-			for ghost_loc in ghost_locations:
-				dist = get_distance(pos, (ghost_loc.row, ghost_loc.col))
-				# try:
-				# 	pos_idx = self.dtDict[pos]
-				# 	ghost_idx = self.dtDict[(ghost_loc.row, ghost_loc.col)]
-				# 	print(f'pos: {pos_idx}, ghost_pos: {ghost_idx}')
-				# 	print(type(pos_idx), type(ghost_idx))
-				# 	dist = self.distTable[pos_idx][ghost_idx]
-				# except IndexError:
-				# 	dist = get_distance(pos, (ghost_loc.row, ghost_loc.col))
-				# except KeyError:
-				# 	dist = get_distance(pos, (ghost_loc.row, ghost_loc.col))
-
-				if dist_to_closest_ghost is None or dist < dist_to_closest_ghost:
-					dist_to_closest_ghost = dist
-
-			if dist_to_closest_ghost > max_dist:
-				max_dist = dist_to_closest_ghost
-				max_dist_point = pos
-		path = find_path(pacmanPos, max_dist_point, self.state, self.avoidance_map)
-		"""
-
-		ghost_directions = GhostPrediction.getGhostDirection(self.ghostPrediction, self.state)
+		ghost_directions, ghost_locations = self.ghostPrediction.getGhostDirection(self.state)
 		print(f"Ghost directions: {ghost_directions}")
+		for idx, (ghost_col, ghost_dir) in enumerate(ghost_directions.items()):
+			if ghost_dir != -1:
+				ghost_dir_delta = self.ghostPrediction.delta_dict[ghost_dir]
+				adj_probs = self.ghostPrediction.getGhostAdjacentProbs(self.state, ghost_col, ghost_locations[idx], ghost_dir_delta)
+				for adj_cell, prob in adj_probs.items():
+					print(f'{ghost_col} at {ghost_locations[idx]}: {adj_cell} with prob {prob}')
 
-		# Testing new way: within X block radius, set target to cell with lowest score in avoidance map
+		# Within X block radius, set target to cell with lowest score in avoidance map
 		self.avoidance_map.updateMap(self.state)
+		num_pellets = self.avoidance_map.num_pellets
+
+		# Pacbot evaluates more options as it gets closer to the end of the level
+		if num_pellets > 200:
+			radius = 5
+		elif num_pellets > 100:
+			radius = 10
+		elif num_pellets > 50:
+			radius = 15
+		else:
+			radius = 20
+
 		radius = 5
 		avoidanceScores = {}
 		for i in range(-radius, radius+1):
@@ -128,6 +115,7 @@ class DecisionModule:
 	
 		if len(path) >= 1:
 			self.targetPos = path[0]
+		
 		print(f"Path: {path}")
 		
 
@@ -153,8 +141,7 @@ class DecisionModule:
 			# Lock the game state
 			self.state.lock()
 
-			print(f"Current: {self.state.pacmanLoc.row}, {self.state.pacmanLoc.col}")
-			print(f"Target: {self.targetPos[0]}, {self.targetPos[1]}")
+			print(f"pacmanLoc ({self.state.pacmanLoc.row}, {self.state.pacmanLoc.col})  ->  targetPos ({self.targetPos[0]}, {self.targetPos[1]})")
 
 			# Calculate the delta between the current position and the target position
 			deltaRow = self.targetPos[0] - self.state.pacmanLoc.row
@@ -175,7 +162,7 @@ class DecisionModule:
 				# Update our position on the server.
 				# In the future, this needs to be replaced by a call to the low level movement code
 				self.state.queueAction(1, direction)
-				await asyncio.sleep(0.5)
+				await asyncio.sleep(0.1)
 				
 
 			# Unlock the game state
@@ -186,3 +173,18 @@ class DecisionModule:
 
 			# Free up the event loop
 			await asyncio.sleep(0)
+
+
+"""
+================================================.
+     .-.   .-.     .--.                         |
+    | OO| | OO|   / _.-' .-.   .-.  .-.   .''.  |
+    |   | |   |   \  '-. '-'   '-'  '-'   '..'  |
+    '^^^' '^^^'    '--'                         |
+===============.  .-.  .================.  .-.  |
+               | |   | |                |  '-'  |
+               | |   | |                |       |
+               | ':-:' |                |  .-.  |
+               |  '-'  |                |  '-'  |
+==============='       '================'       |
+"""
