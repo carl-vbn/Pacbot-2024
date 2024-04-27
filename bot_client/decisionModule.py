@@ -58,6 +58,7 @@ class DecisionModule:
 		# Ghost prediction
 		self.ghostPrediction = GhostPrediction(self.state)
 
+
 	def update_target_loc(self):
 		'''
 		Decide the direction to move in
