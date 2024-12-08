@@ -16,8 +16,10 @@ class cellAvoidanceMap:
         """
         self.avoidance_map = {}
         self.g = g
-        self.pellet_boost = 50
-        self.superPellet_boost = 200
+        self.pellet_boost = 50 # TUNABLE
+        self.superPellet_boost = 200 # TUNABLE
+        self.fruit_boost = 600 # TUNABLE
+        self.ghost_boost = 1000 # TUNABLE
 
         self.distTable = loadDistTable()
         self.dtDict = loadDistTableDict()
@@ -59,13 +61,13 @@ class cellAvoidanceMap:
                 fright_modifier = 1
                 if ghost.isFrightened():
                     fright_modifier = -1
-                THRESHOLD_DIST = 8 # tunable 
-                if dist < THRESHOLD_DIST:
+                GHOST_THRESHOLD_DIST = 8 # tunable 
+                if dist < GHOST_THRESHOLD_DIST:
                     #dist = get_astar_dist(tile, ghost_pos, self.g)
                     if dist == 0 or dist is None:
-                        ghost_proximity += 1000*fright_modifier  # Tunable
+                        ghost_proximity += self.ghost_boost * fright_modifier
                     else:
-                        ghost_proximity += 1 / dist* 250 * fright_modifier  # Tunable
+                        ghost_proximity += self.ghost_boost / (4 * dist) * fright_modifier  # Tunable
 
             # TODO: Maybe account for distance to nearby pellets?
             pellet_boost = 0
@@ -92,8 +94,18 @@ class cellAvoidanceMap:
                 
             if self.g.superPelletAt(tile[0], tile[1]):
                 pellet_boost = self.superPellet_boost
+            
+            fruit_boost = 0
+            if self.g.fruitAt(self.g.fruitLoc.row, self.g.fruitLoc.col): # if there is a fruit on the board
+                dist = get_distance(tile, (self.g.fruitLoc.row, self.g.fruitLoc.col))
+                FRUIT_THRESHOLD_DIST = 5
+                if dist == 0 or dist is None:
+                    fruit_boost = self.fruit_boost * ((self.g.fruitSteps + self.g.fruitDuration) / self.g.fruitDuration)
+                elif dist < FRUIT_THRESHOLD_DIST:
+                    fruit_boost = self.fruit_boost * ((self.g.fruitSteps + self.g.fruitDuration) / self.g.fruitDuration) / (dist * 2)
+                
 
-            self.avoidance_map[tile] = ghost_proximity - pellet_boost
+            self.avoidance_map[tile] = ghost_proximity - pellet_boost - fruit_boost # negative is good, positive is bad
     
     def show_map(self):
         """
