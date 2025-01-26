@@ -13,7 +13,7 @@ int previous_direction = 0;
 int delay_time = 200; 
 int vertical_time = 2000;
 int horizontal_time = 500;
-int speed_multiplier = 1.1;
+
 
 #define LED_PIN LED_BUILTIN
 
@@ -45,8 +45,8 @@ void forward(int top_left, int top_right, int bottom_left, int bottom_right) {
   analogWrite(MOTOR_FORWARD_PINS[top_right], 0);
   analogWrite(MOTOR_BACKWARD_PINS[top_left], 0);
   analogWrite(MOTOR_BACKWARD_PINS[bottom_left], 0);
-  analogWrite(MOTOR_FORWARD_PINS[top_left], speed*speed_multiplier);
-  analogWrite(MOTOR_FORWARD_PINS[bottom_left], speed*speed_multiplier);
+  analogWrite(MOTOR_FORWARD_PINS[top_left], speed);
+  analogWrite(MOTOR_FORWARD_PINS[bottom_left], speed);
   analogWrite(MOTOR_BACKWARD_PINS[top_right], speed);
   analogWrite(MOTOR_BACKWARD_PINS[bottom_right], speed);
 }
@@ -99,6 +99,7 @@ void stop(int top_left, int top_right, int bottom_left, int bottom_right){
   analogWrite(MOTOR_BACKWARD_PINS[bottom_right], 0);
 }
 
+
 void loop() {
   // put your main code here, to run repeatedly:
   int top_left = 0;
@@ -112,8 +113,25 @@ void loop() {
   int bot_direction = 4*gpio1_val + 2*gpio2_val + 1*gpio3_val;
   Serial.print("Direction:");
   Serial.println(bot_direction);
-
-  if (bot_direction == 1) { // left
+  if (previous_direction == 0){
+    previous_direction = bot_direction;
+  }
+  if (bot_direction != previous_direction) {
+    if (previous_direction == 1) { // left
+      left(top_left, top_right, bottom_left, bottom_right);
+      delay(delay_time);
+    } else if (previous_direction == 2) { // right
+      right(top_left, top_right, bottom_left, bottom_right);
+      delay(delay_time);
+    } else if (previous_direction == 3) { // forward 
+      forward(top_left, top_right, bottom_left, bottom_right);
+      delay(delay_time);
+    } else if (previous_direction == 4) { // backward
+      backward(top_left, top_right, bottom_left, bottom_right); 
+      delay(delay_time);   
+    } 
+  } else {
+    if (bot_direction == 1) { // left
       left(top_left, top_right, bottom_left, bottom_right);
     } else if (bot_direction == 2) { // right
       right(top_left, top_right, bottom_left, bottom_right);
@@ -139,4 +157,5 @@ void loop() {
     } else {
       stop(top_left, top_right, bottom_left, bottom_right);
     }
+  }
 }

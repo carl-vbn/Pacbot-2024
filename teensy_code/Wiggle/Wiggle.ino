@@ -13,18 +13,18 @@ int previous_direction = 0;
 int delay_time = 200; 
 int vertical_time = 2000;
 int horizontal_time = 500;
-int speed_multiplier = 1.1;
+int speed_multi
+double WIGGLE_CONST = (double)40;
 
 #define LED_PIN LED_BUILTIN
-
 
 void init_motors() {
   for (int i = 0; i<4; i++) {
     pinMode(MOTOR_FORWARD_PINS[i], OUTPUT);
     pinMode(MOTOR_BACKWARD_PINS[i], OUTPUT);
 
-    analogWrite(MOTOR_FORWARD_PINS[i], 0);
-    analogWrite(MOTOR_BACKWARD_PINS[i], 0);
+    analogWrite(MOTOR_FORWARD_PINS[i],rng_babyy());
+    analogWrite(MOTOR_BACKWARD_PINS[i],rng_babyy());
   }
 }
 
@@ -41,10 +41,10 @@ void setup() {
 
 void forward(int top_left, int top_right, int bottom_left, int bottom_right) {
   // 
-  analogWrite(MOTOR_FORWARD_PINS[bottom_right], 0);
-  analogWrite(MOTOR_FORWARD_PINS[top_right], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[top_left], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[bottom_left], 0);
+  analogWrite(MOTOR_FORWARD_PINS[bottom_right],rng_babyy());
+  analogWrite(MOTOR_FORWARD_PINS[top_right],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[top_left],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[bottom_left],rng_babyy());
   analogWrite(MOTOR_FORWARD_PINS[top_left], speed*speed_multiplier);
   analogWrite(MOTOR_FORWARD_PINS[bottom_left], speed*speed_multiplier);
   analogWrite(MOTOR_BACKWARD_PINS[top_right], speed);
@@ -52,10 +52,10 @@ void forward(int top_left, int top_right, int bottom_left, int bottom_right) {
 }
 
 void backward(int top_left, int top_right, int bottom_left, int bottom_right){
-  analogWrite(MOTOR_FORWARD_PINS[top_left], 0);
-  analogWrite(MOTOR_FORWARD_PINS[bottom_left], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[top_right], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[bottom_right], 0);
+  analogWrite(MOTOR_FORWARD_PINS[top_left],rng_babyy());
+  analogWrite(MOTOR_FORWARD_PINS[bottom_left],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[top_right],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[bottom_right],rng_babyy());
   analogWrite(MOTOR_FORWARD_PINS[top_right], speed);
   analogWrite(MOTOR_FORWARD_PINS[bottom_right], speed);
   analogWrite(MOTOR_BACKWARD_PINS[top_left], speed);
@@ -64,10 +64,10 @@ void backward(int top_left, int top_right, int bottom_left, int bottom_right){
 }
 
 void left(int top_left, int top_right, int bottom_left, int bottom_right) {
-  analogWrite(MOTOR_FORWARD_PINS[top_left], 0);
-  analogWrite(MOTOR_FORWARD_PINS[top_right], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[bottom_left], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[bottom_right], 0);
+  analogWrite(MOTOR_FORWARD_PINS[top_left],rng_babyy());
+  analogWrite(MOTOR_FORWARD_PINS[top_right],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[bottom_left],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[bottom_right],rng_babyy());
   analogWrite(MOTOR_FORWARD_PINS[bottom_left], speed);
   analogWrite(MOTOR_FORWARD_PINS[bottom_right], speed);
 
@@ -77,10 +77,10 @@ void left(int top_left, int top_right, int bottom_left, int bottom_right) {
 }
 
 void right(int top_left, int top_right, int bottom_left, int bottom_right) {
-  analogWrite(MOTOR_FORWARD_PINS[bottom_left], 0);
-  analogWrite(MOTOR_FORWARD_PINS[bottom_right], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[top_left], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[top_right], 0);
+  analogWrite(MOTOR_FORWARD_PINS[bottom_left],rng_babyy());
+  analogWrite(MOTOR_FORWARD_PINS[bottom_right],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[top_left],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[top_right],rng_babyy());
   analogWrite(MOTOR_FORWARD_PINS[top_left], speed);
   analogWrite(MOTOR_FORWARD_PINS[top_right], speed);
   analogWrite(MOTOR_BACKWARD_PINS[bottom_left], speed);
@@ -88,15 +88,15 @@ void right(int top_left, int top_right, int bottom_left, int bottom_right) {
 }
 
 void stop(int top_left, int top_right, int bottom_left, int bottom_right){
-  analogWrite(MOTOR_FORWARD_PINS[top_left], 0);
-  analogWrite(MOTOR_FORWARD_PINS[top_right], 0);
-  analogWrite(MOTOR_FORWARD_PINS[bottom_left], 0);
-  analogWrite(MOTOR_FORWARD_PINS[bottom_right], 0);
+  analogWrite(MOTOR_FORWARD_PINS[top_left],rng_babyy());
+  analogWrite(MOTOR_FORWARD_PINS[top_right],rng_babyy());
+  analogWrite(MOTOR_FORWARD_PINS[bottom_left],rng_babyy());
+  analogWrite(MOTOR_FORWARD_PINS[bottom_right],rng_babyy());
 
-  analogWrite(MOTOR_BACKWARD_PINS[top_left], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[top_right], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[bottom_left], 0);
-  analogWrite(MOTOR_BACKWARD_PINS[bottom_right], 0);
+  analogWrite(MOTOR_BACKWARD_PINS[top_left],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[top_right],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[bottom_left],rng_babyy());
+  analogWrite(MOTOR_BACKWARD_PINS[bottom_right],rng_babyy());
 }
 
 void loop() {
@@ -139,4 +139,9 @@ void loop() {
     } else {
       stop(top_left, top_right, bottom_left, bottom_right);
     }
+}
+
+double rng_babyy()
+{
+    return (double)rand() / (double)RAND_MAX * WIGGLE_CONST;
 }
