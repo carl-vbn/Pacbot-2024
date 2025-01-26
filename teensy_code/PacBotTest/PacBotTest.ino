@@ -83,8 +83,8 @@ void forward(int speed, int rightBias) {
     CW(1, 0);
     CW(2, speed);
     CW(3, speed);
-    CCW(0, speed);
-    CCW(1, speed);
+    CCW(0, speed+rightBias);
+    CCW(1, speed+rightBias);
     CCW(2, 0);
     CCW(3, 0);
 }
@@ -144,15 +144,23 @@ void setup()
 }
 
 void loop() {
-  delay(3000);
-  forward(120);
-  delay(500);
-  right(120);
-  delay(500);
-  backward(120);
-  delay(500);
-  left(120);
-  delay(500);
+  // delay(3000);
+  // measure the distance
+  for (int i = 0; i < 100; i++){
+    int distance = sensor_2_3.readRangeSingleMillimeters();
+    // calculate the right bias
+    int rightBias = distance - 60;
+    // update the forward function call
+    forward(120, rightBias);
+    delay(500);
+  }
+  
+  // right(120);
+  // delay(500);
+  // backward(120);
+  // delay(500);
+  // left(120);
+  // delay(500);
   stop();
 }
 
