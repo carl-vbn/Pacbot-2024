@@ -31,11 +31,17 @@ def get_walkable_tiles(g: GameState):
     @return:
         - set, a set of tuples representing the walkable cells
     """
+    
+    if g.walkable_cells is not None:
+        return g.walkable_cells
+    
     walkable_cells = set()
     for row in range(31):
         for col in range(28):
             if not g.wallAt(row, col):
                 walkable_cells.add((row, col))
+                
+    g.walkable_cells = walkable_cells
     return walkable_cells
 
 

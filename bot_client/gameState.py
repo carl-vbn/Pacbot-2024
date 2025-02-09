@@ -451,6 +451,7 @@ class GameState:
 		self.format += (31 * 'I')
   
 		self.resume = resume # do we resume the game whenever pacman loses a life or progresses to the next level
+		self.walkable_cells = None # set of walkable cells (non-wall)
 
 	def lock(self) -> None:
 		'''

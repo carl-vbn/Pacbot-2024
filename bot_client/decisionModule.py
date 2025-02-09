@@ -66,7 +66,9 @@ class DecisionModule:
 
 		# Game state object to store the game information
 		self.state = state
-		self.targetPos = (state.pacmanLoc.row, state.pacmanLoc.col) # The position we want Pacman to be at. Should never be more than 1 cell away from Pacman
+   		# The position we want Pacman to be at. Should never be more than 1 cell away from Pacman
+		# This is the next tile Pacman should move to, NOT the end goal of the path.
+		self.targetPos = (state.pacmanLoc.row, state.pacmanLoc.col)
 
 		self.walkable_cells = get_walkable_tiles(state)
 		self.avoidance_map = cellAvoidanceMap(state)
@@ -146,7 +148,8 @@ class DecisionModule:
 			for j in range(-radius, radius+1):
 				# If the cell is in the avoidance map, add it to the list of cells to consider
 				if (pacmanPos[0] + i, pacmanPos[1] + j) in self.avoidance_map.avoidance_map:
-					avoidanceScores[(pacmanPos[0] + i, pacmanPos[1] + j)] = self.avoidance_map.avoidance_map[(pacmanPos[0] + i, pacmanPos[1] + j)]
+					# we add the distance to the score to help with pacbot's indecisiveness
+					avoidanceScores[(pacmanPos[0] + i, pacmanPos[1] + j)] = self.avoidance_map.avoidance_map[(pacmanPos[0] + i, pacmanPos[1] + j)] + get_distance(pacmanPos, (pacmanPos[0] + i, pacmanPos[1] + j))
 		
 		# If there are cells to consider, set the target to the cell with the lowest score
 		if avoidanceScores:
