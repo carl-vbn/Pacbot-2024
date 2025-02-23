@@ -1,5 +1,6 @@
 import heapq
 import math
+from typing import Tuple, Dict, List
 
 from gameState import GameState
 
@@ -22,6 +23,12 @@ class PriorityQueue:
     def empty(self):
         return len(self._queue) == 0
     
+def manhattan_distance(a: Tuple[int, int], b: Tuple[int, int]) -> int:
+    """
+    Return the Manhattan distance between two grid cells.
+    Manhattan distance = |r1 - r2| + |c1 - c2|.
+    """
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 def get_walkable_tiles(g: GameState):
     """

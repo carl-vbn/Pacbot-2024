@@ -298,7 +298,7 @@ class Ghost:
 			# Pink targets the space 4 ahead of Pacman
 			elif self.color == GhostColors.PINK:
 				targetRow = pacmanRow + 4 * pacmanRowDir
-				targetRow = pacmanCol + 4 * pacmanColDir
+				targetCol = pacmanCol + 4 * pacmanColDir
 
 			# Cyan targets the position of red, reflected about the position 2 spaces
 			# ahead of Pacman
@@ -618,19 +618,17 @@ class GameState:
 			ghost.plannedDirection = ghostPlans[ghost.color]
 
 	def pelletAt(self, row: int, col: int) -> bool:
-		'''
-		Helper function to check if a pellet is at a given location
-		'''
-
+		# Maze dimensions: 31 rows, 28 columns (adjust if your maze differs)
+		if row < 0 or row >= 31 or col < 0 or col >= 28:
+			return False
 		return bool((self.pelletArr[row] >> col) & 1)
 
-	def superPelletAt(self, row: int, col: int) -> bool:
-		'''
-		Helper function to check if a super pellet is at a given location
-		'''
 
-		return self.pelletAt(row, col) and \
-			((row == 3) or (row == 23)) and ((col == 1) or (col == 26))
+	def superPelletAt(self, row: int, col: int) -> bool:
+		if row < 0 or row >= 31 or col < 0 or col >= 28:
+			return False
+		return self.pelletAt(row, col) and ((row == 3) or (row == 23)) and ((col == 1) or (col == 26))
+
 
 	def fruitAt(self, row: int, col: int) -> bool:
 		'''
