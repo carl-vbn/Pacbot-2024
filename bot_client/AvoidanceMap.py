@@ -37,7 +37,7 @@ class cellAvoidanceMap:
 
     def get_pellet_boost(self, tile: Tuple[int, int]) -> float:
         row, col = tile
-        pellet_scaling = max(1.0, 50 / max(1, self.g.numPellets()))
+        pellet_scaling = max(1.0, 50 / max(1, self.g.numPellets())) # we don't increase the pellet scaling until there are fewer than 50 pellets left, then it's inversely proportional to the number of pellets
         if self.g.superPelletAt(row, col):
             ghost_distances = [
                 manhattan_distance(tile, (ghost.location.row, ghost.location.col))
@@ -60,7 +60,7 @@ class cellAvoidanceMap:
             for c in range(col - radius, col + radius + 1):
                 if self.g.pelletAt(r, c) or self.g.superPelletAt(r, c):
                     cluster_count += 1
-        max_possible = (2 * radius + 1) ** 2
+        max_possible = (2 * radius + 1) ** 2 # TODO: maybe max_possible should instead be based on the number of walkable tiles in that radius
         return 1 + (cluster_count / max_possible)
 
     def get_ghost_proximity(self, tile: Tuple[int, int], ghost) -> float:
@@ -70,6 +70,7 @@ class cellAvoidanceMap:
         decay = math.exp(-self.GHOST_DECAY_ALPHA * dist)
         fright_modifier = -1 if ghost.isFrightened() else 1
         lives_factor = max(1.0, 3 - self.g.currLives)
+        # TODO: would love for there to be comments explaining the diff behaviors of the ghosts
         boost_factor = {
             GhostColors.RED: 1.2,
             GhostColors.PINK: 1.1 if dist < 5 else 0.8,
@@ -80,7 +81,6 @@ class cellAvoidanceMap:
         return self.GHOST_BOOST * decay * fright_modifier * boost_factor * mode_factor * lives_factor
 
     def get_fruit_boost(self, tile: Tuple[int, int]) -> float:
-        row, col = tile
         if self.g.fruitLoc and self.g.fruitAt(self.g.fruitLoc.row, self.g.fruitLoc.col):
             dist = manhattan_distance(tile, (self.g.fruitLoc.row, self.g.fruitLoc.col))
             if dist is None:
@@ -97,6 +97,8 @@ class cellAvoidanceMap:
         if pacman_dir != Directions.NONE:
             d_row, d_col = D_ROW[pacman_dir], D_COL[pacman_dir]
             next_pos = (self.g.pacmanLoc.row + d_row, self.g.pacmanLoc.col + d_col)
+            # TODO: maybe we also want to add momentum bias to the tile after the next
+            # TODO: or maybe we want to add negative momentum bias to the tile behind
             if (row, col) == next_pos and not self.g.wallAt(next_pos[0], next_pos[1]):
                 return self.MOMENTUM_BIAS
         return 0
@@ -108,11 +110,13 @@ class cellAvoidanceMap:
             for ghost in self.g.ghosts if not ghost.isFrightened()
         ]
         ghost_distances = [d for d in ghost_distances if d is not None]
+        # if ghosts are close, bait them and go for super pellets
         if ghost_distances and min(ghost_distances) < self.GHOST_THRESHOLD_DIST:
-            super_pellets = [(r, c) for r, c in self.walkable_tiles if self.g.superPelletAt(r, c)]
+            super_pellets = [(r, c) for r, c in self.walkable_tiles if self.g.superPelletAt(r, c)] # TODO: we shouldn't need to check all walkable tiles to find the super pellets
             if super_pellets:
                 return min(super_pellets, key=lambda t: manhattan_distance((self.g.pacmanLoc.row, self.g.pacmanLoc.col), t))
         pellets = [(r, c) for r, c in self.walkable_tiles if self.g.pelletAt(r, c)]
+        # go for the biggest pellet cluster
         return max(pellets, key=lambda t: self.compute_pellet_cluster(t)) if pellets else (self.g.pacmanLoc.row, self.g.pacmanLoc.col)
 
     def a_star_boost(self, tile: Tuple[int, int], goal: Tuple[int, int]) -> float:
