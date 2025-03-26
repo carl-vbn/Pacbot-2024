@@ -41,6 +41,7 @@ void init_state() {
 #define STOP() bot_state.stopped = true
 #define START() bot_state.stopped = false
 #define SET_SPEED(speed) bot_state.speed = (speed)
+#define SET_DIR(_dir) bot_state.dir = (_dir)
 #define PAUSE(duration) bot_state.pause_time += (duration)
 #define TURN_RIGHT() bot_state.dir = (bot_state.dir + 1) % 4
 #define TURN_LEFT() bot_state.dir = (bot_state.dir + 3) % 4
@@ -58,11 +59,6 @@ void movement_tick(long delta_time) {
   bool allVoid = rightVoid && leftVoid && frontDist > 250 && backDist > 250;
 
   if (bot_state.stopped) {
-    m_stop();
-    if (backDist < 100) START(); // Start the robot by putting your hand near the back
-    return;
-  } else if (allVoid) {
-    STOP(); // Stop if lifted away from the maze
     m_stop();
     return;
   }
@@ -87,13 +83,14 @@ void movement_tick(long delta_time) {
     MOVE_SIDE(FRONT, frontDist < 255 ? DANGER_SPEED : BASE_SPEED, rightBias);
   }
 
-  if (frontDist >= OPTIMAL_FRONT_DIST && frontDist < (OPTIMAL_FRONT_DIST + 5)) {
-    if (rightVoid) {
-      TURN_RIGHT();
-    } else if (leftVoid) {
-      TURN_LEFT();
-    } else {
-      STOP();
-    }
-  }
+  // Turning is controlled by RPi
+  // if (frontDist >= OPTIMAL_FRONT_DIST && frontDist < (OPTIMAL_FRONT_DIST + 5)) {
+  //   if (rightVoid) {
+  //     TURN_RIGHT();
+  //   } else if (leftVoid) {
+  //     TURN_LEFT();
+  //   } else {
+  //     STOP();
+  //   }
+  // }
 }

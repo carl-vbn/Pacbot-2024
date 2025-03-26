@@ -144,23 +144,15 @@ void setup()
 }
 
 void loop() {
-  // delay(3000);
+  delay(3000);
   // measure the distance
-  for (int i = 0; i < 100; i++){
-    int distance = sensor_2_3.readRangeSingleMillimeters();
-    // calculate the right bias
-    int rightBias = distance - 60;
-    // update the forward function call
-    forward(120, rightBias);
-    delay(500);
-  }
-  
-  // right(120);
-  // delay(500);
-  // backward(120);
-  // delay(500);
-  // left(120);
-  // delay(500);
-  stop();
+  // for (int i = 0; i < 100; i++){
+  //   int distance = sensor_2_3.readRangeSingleMillimeters();
+  //   // calculate the right bias
+  //   int rightBias = distance - 60;
+  //   // update the forward function call
+  //   forward(80, rightBias);
+  //   delay(100);
+  // }
 }
 

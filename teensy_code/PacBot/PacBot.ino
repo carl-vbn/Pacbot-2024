@@ -26,6 +26,18 @@ void setup()
 long last_tick_time = 0;
 void loop() {
   long now = millis();
+
+  int gpioVal = digitalRead(gpio_pin_1);
+  gpioVal |= digitalRead(gpio_pin_2) << 1;
+  gpioVal |= digitalRead(gpio_pin_3) << 2;
+
+  if (gpioVal == 0) {
+    STOP();
+  } else if (gpioVal <= 4) {
+    START();
+    SET_DIR(gpioVal - 1);
+  } // TODO Implement turning
+
   movement_tick(now - last_tick_time);
   delay(10);
   last_tick_time = now;
