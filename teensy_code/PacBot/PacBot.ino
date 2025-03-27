@@ -19,7 +19,7 @@ void setup()
   init_motors();
 
   init_state();
-  handshake_progress = 0;
+  handshake_progress = 3;
 
   digitalWrite(LED_BUILTIN, HIGH);
 
@@ -69,7 +69,7 @@ void loop() {
     STOP();
   } else if (gpioVal <= 4) {
     START();
-    // SET_DIR(gpioVal - 1);
+    SET_DIR(gpioVal - 1);
   } // TODO Implement turning
 
   movement_tick(now - last_tick_time, gpioVal);

@@ -72,6 +72,29 @@ void m_counterclockwise(int speed) {
   }
 }
 
+void m_compound(uint8_t dir, int frontSpeed, int lateralSpeed, int rotation) {
+  int speeds[4];
+
+  // Calculate mixed speed for each motor
+  speeds[0] =  0          - lateralSpeed + rotation;
+  speeds[1] =  frontSpeed + 0            + rotation;
+  speeds[2] =  0          + lateralSpeed + rotation;
+  speeds[3] = -frontSpeed - 0            + rotation;
+
+  // Apply speeds to motors
+  for (int i = 0; i < 4; i++) {
+    int speed = speeds[(i + 4 - dir) % 4];
+    if (speed > 0) {
+      CW(i, speed);
+      CCW(i, 0);
+    } else {
+      CW(i, 0);
+      CCW(i, -speed);
+    }
+  }
+}
+
+
 void m_beep() {
   for (uint8_t i = 0; i<4; i++) {
     CW(i, 40);

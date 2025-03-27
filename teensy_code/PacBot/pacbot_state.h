@@ -15,6 +15,8 @@
 #define DANGER_SPEED 80 // Danger means an obstacle is detected ahead
 #define BACKOFF_SPEED 80 // Speed while reversing
 #define OPTIMAL_FRONT_DIST 50
+#define LATERAL_CORRECTION_SPEED 60
+#define ROTATIONAL_CORRECTION_SPEED 70
 
 typedef struct {
   uint8_t dir;
@@ -60,14 +62,15 @@ void movement_tick(long delta_time, int gpioVal) {
   uint8_t frontDist = READ_SIDE_DIST(FRONT);
   uint8_t leftDist = READ_SIDE_DIST(LEFT);
   uint8_t rightDist = READ_SIDE_DIST(RIGHT);
+  int current_dist_sum = rightDist + leftDist;
   int rightShift = leftDist - rightDist;
-  int rightBias = 0;
   bool rightVoid = rightDist > 250;
   bool leftVoid = leftDist > 250;
   bool anyVoid = leftVoid || rightVoid;
   bool allVoid = rightVoid && leftVoid && frontDist > 250 && backDist > 250;
 
   if (bot_state.stopped) {
+    target_dist_sum = current_dist_sum;
     m_stop();
     return;
   }
@@ -78,32 +81,24 @@ void movement_tick(long delta_time, int gpioVal) {
     return;
   }
 
-  if (!anyVoid && abs(rightShift) > 10) {
-    if (rightShift > 0) {
-      rightBias = 30;
-    } else {
-      rightBias = -30;
-    }
+  int frontSpeed = 0;
+  int lateralSpeed = 0;
+  int rotation = 0;
+
+  if (frontDist < OPTIMAL_FRONT_DIST) {
+    frontSpeed = -BACKOFF_SPEED; 
+  } else {
+    frontSpeed = frontDist < 255 ? DANGER_SPEED : BASE_SPEED;
   }
 
-  // if (frontDist < OPTIMAL_FRONT_DIST) {
-  //   MOVE_SIDE(BACK, BACKOFF_SPEED, 0);
-  // } else {
-  //   MOVE_SIDE(FRONT, frontDist < 255 ? DANGER_SPEED : BASE_SPEED, rightBias);
-  // }
-
-  // Align in the maze
+  // Alignment corrections
   long now = millis();
-  int current_dist_sum = rightDist + leftDist;
   int dist_sum_error = abs(current_dist_sum - target_dist_sum);
-  if (gpioVal == 2) {
-    // Compute target_dist_sum
-    target_dist_sum = current_dist_sum;
-  }
 
-  if (gpioVal == 1) {
+  if (!rightVoid && !leftVoid) {
     if (dist_sum_error > 10) {
       // Rotational alignment
+      frontSpeed = 0;
       if (now > rot_end_time) {
         if (dist_err_prerot < dist_sum_error)
           rot_dir = !rot_dir;
@@ -111,17 +106,17 @@ void movement_tick(long delta_time, int gpioVal) {
         dist_err_prerot = dist_sum_error;
         rot_end_time = now + 50;
       }
-      if (rot_dir) m_clockwise(70);
-      else m_counterclockwise(70);
+      if (rot_dir) rotation = ROTATIONAL_CORRECTION_SPEED;
+      else rotation = -ROTATIONAL_CORRECTION_SPEED;
     } else if (abs(rightShift) > 10) {
       // Lateral alignment
       if (rightShift > 0) {
-        MOVE_SIDE(LEFT, 70, 0);
+        lateralSpeed = -LATERAL_CORRECTION_SPEED;
       } else {
-        MOVE_SIDE(RIGHT, 70, 0);
+        lateralSpeed = LATERAL_CORRECTION_SPEED;
       }
-    } else {
-      m_stop();
     }
   }
+  
+  m_compound(bot_state.dir, frontSpeed, lateralSpeed, rotation);
 }
