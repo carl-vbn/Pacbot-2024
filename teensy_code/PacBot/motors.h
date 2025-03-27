@@ -58,6 +58,29 @@ void m_west(int speed, int rightBias) {
   CCW(3, 0);
 }
 
+void m_clockwise(int speed) {
+  for (int i = 0; i<4; i++) {
+    CW(i, 0);
+    CCW(i, speed);
+  }
+}
+
+void m_counterclockwise(int speed) {
+  for (int i = 0; i<4; i++) {
+    CW(i, speed);
+    CCW(i, 0);
+  }
+}
+
+void m_beep() {
+  for (uint8_t i = 0; i<4; i++) {
+    CW(i, 40);
+    CCW(i, 0);
+  }
+}
+
+#define SYNC_BEEP(length) do { m_beep(); delay(length); m_stop(); } while(false);
+
 void m_stop() {
   for (uint8_t i = 0; i<4; i++) {
     CW(i, 0);

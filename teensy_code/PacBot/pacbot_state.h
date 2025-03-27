@@ -24,6 +24,12 @@ typedef struct {
 
 pb_state_t bot_state;
 
+// Rotational alignment sequence
+int target_dist_sum; // Sum of left and right sensor values when aligned with walls
+bool rot_dir;
+long rot_end_time;
+int dist_err_prerot;
+
 #define READ_DIR_DIST(dir) (sensors[(dir)].readRangeContinuous())
 #define READ_SIDE_DIST(side) (sensors[(bot_state.dir + (side)) % 4].readRangeContinuous())
 #define MOVE_DIR(dir, speed, rightBias) m_funcs[(dir)]((speed), (rightBias));
@@ -36,6 +42,9 @@ void init_state() {
   bot_state.dir = NORTH;
   bot_state.stopped = true;
   bot_state.pause_time = 0;
+
+  rot_dir = false;
+  rot_end_time = 0;
 }
 
 #define STOP() bot_state.stopped = true
@@ -46,7 +55,7 @@ void init_state() {
 #define TURN_RIGHT() bot_state.dir = (bot_state.dir + 1) % 4
 #define TURN_LEFT() bot_state.dir = (bot_state.dir + 3) % 4
 
-void movement_tick(long delta_time) {
+void movement_tick(long delta_time, int gpioVal) {
   uint8_t backDist = READ_SIDE_DIST(BACK);
   uint8_t frontDist = READ_SIDE_DIST(FRONT);
   uint8_t leftDist = READ_SIDE_DIST(LEFT);
@@ -77,20 +86,42 @@ void movement_tick(long delta_time) {
     }
   }
 
-  if (frontDist < OPTIMAL_FRONT_DIST) {
-    MOVE_SIDE(BACK, BACKOFF_SPEED, 0);
-  } else {
-    MOVE_SIDE(FRONT, frontDist < 255 ? DANGER_SPEED : BASE_SPEED, rightBias);
+  // if (frontDist < OPTIMAL_FRONT_DIST) {
+  //   MOVE_SIDE(BACK, BACKOFF_SPEED, 0);
+  // } else {
+  //   MOVE_SIDE(FRONT, frontDist < 255 ? DANGER_SPEED : BASE_SPEED, rightBias);
+  // }
+
+  // Align in the maze
+  long now = millis();
+  int current_dist_sum = rightDist + leftDist;
+  int dist_sum_error = abs(current_dist_sum - target_dist_sum);
+  if (gpioVal == 2) {
+    // Compute target_dist_sum
+    target_dist_sum = current_dist_sum;
   }
 
-  // Turning is controlled by RPi
-  // if (frontDist >= OPTIMAL_FRONT_DIST && frontDist < (OPTIMAL_FRONT_DIST + 5)) {
-  //   if (rightVoid) {
-  //     TURN_RIGHT();
-  //   } else if (leftVoid) {
-  //     TURN_LEFT();
-  //   } else {
-  //     STOP();
-  //   }
-  // }
+  if (gpioVal == 1) {
+    if (dist_sum_error > 10) {
+      // Rotational alignment
+      if (now > rot_end_time) {
+        if (dist_err_prerot < dist_sum_error)
+          rot_dir = !rot_dir;
+        
+        dist_err_prerot = dist_sum_error;
+        rot_end_time = now + 50;
+      }
+      if (rot_dir) m_clockwise(70);
+      else m_counterclockwise(70);
+    } else if (abs(rightShift) > 10) {
+      // Lateral alignment
+      if (rightShift > 0) {
+        MOVE_SIDE(LEFT, 70, 0);
+      } else {
+        MOVE_SIDE(RIGHT, 70, 0);
+      }
+    } else {
+      m_stop();
+    }
+  }
 }
