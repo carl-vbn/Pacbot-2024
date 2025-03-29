@@ -15,7 +15,12 @@ from DistMatrix import createDistTable, createDistTableDict, loadDistTable, load
 from pathfinding import find_path
 from AvoidanceMap import cellAvoidanceMap
 
-from RPi.GPIO import GPIO
+import RPi.GPIO as GPIO
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(14, GPIO.OUT)
+GPIO.setup(15, GPIO.OUT)
+GPIO.setup(18, GPIO.OUT)
 
 def direction_from_delta(deltaRow, deltaCol):
 	if deltaRow == 1:
@@ -215,7 +220,11 @@ class DecisionModule:
 				# if robot is stuck for a prolonged duration, move randomly
 				if time() - self.lastMovementTime > self.STUCK_THRESHOLD:
 					direction = Directions.RANDOM
-					send_to_teensey(direction)
+					# WE DO NOT QUEUE ACTION BECAUSE WE ARE NOT TELLING SERVER RANDOM MOVEMENT
+					if self.state.gameMode != GameModes.PAUSED:
+						send_to_teensey(direction)
+					else:
+						send_to_teensey(Directions.NONE)
 			else:
 				# Otherwise, move towards the target location
 
@@ -225,7 +234,10 @@ class DecisionModule:
 				# Update our position on the server.
 				# !TODO: In the future, this needs to be replaced by a call to the low level movement code
 				self.state.queueAction(1, direction)
-				send_to_teensey(direction)
+				if self.state.gameMode != GameModes.PAUSED:
+					send_to_teensey(direction)
+				else:
+					send_to_teensey(Directions.NONE)
 				self.lastMovementTime = time()
 				await asyncio.sleep(0.2)
 				
