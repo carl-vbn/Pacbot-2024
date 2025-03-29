@@ -218,7 +218,9 @@ class DecisionModule:
 				self.update_target_loc()
 			elif self.state.pacmanLoc.row == self.prevLocation[0] and self.state.pacmanLoc.col == self.prevLocation[1]:
 				# if robot is stuck for a prolonged duration, move randomly
-				if time() - self.lastMovementTime > self.STUCK_THRESHOLD:
+				if self.lastMovementTime is None:
+					self.lastMovementTime = time()
+				elif time() - self.lastMovementTime > self.STUCK_THRESHOLD:
 					direction = Directions.RANDOM
 					# WE DO NOT QUEUE ACTION BECAUSE WE ARE NOT TELLING SERVER RANDOM MOVEMENT
 					if self.state.gameMode != GameModes.PAUSED:
