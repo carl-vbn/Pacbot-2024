@@ -57,6 +57,7 @@ class Directions(IntEnum):
 	DOWN  = 2
 	RIGHT = 3
 	NONE  = 4
+	RANDOM = 5
 
 # Directions:                 U     L     D     R  None
 D_ROW: list[int]        = [  -1,   -0,   +1,   +0,   +0]
