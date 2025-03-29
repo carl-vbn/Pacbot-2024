@@ -14,7 +14,7 @@ from DistMatrix import createDistTable, createDistTableDict, loadDistTable, load
 from pathfinding import find_path
 from AvoidanceMap import cellAvoidanceMap
 
-#from RPi.GPIO import GPIO
+from RPi.GPIO import GPIO
 
 def direction_from_delta(deltaRow, deltaCol):
 	if deltaRow == 1:
@@ -34,12 +34,12 @@ def send_to_teensey(direction):
 	bit_18 = 0
 	if (direction == Directions.DOWN):
 		bit_14=1
-		bit_15=0
+		bit_15=1
 		bit_18=0
 	elif (direction == Directions.UP):
-		bit_14=0
-		bit_15=1
-		bit_18=1
+		bit_14=1
+		bit_15=0
+		bit_18=0
 	elif (direction == Directions.LEFT):
 		bit_14=0
 		bit_15=0
@@ -48,10 +48,14 @@ def send_to_teensey(direction):
 		bit_14=0
 		bit_15=1
 		bit_18=0
+	elif (direction == Directions.RANDOM):
+		bit_14 = 1
+		bit_15 = 0
+		bit_18 = 1
 
-	#GPIO.output(14, bit_14)
-	#GPIO.output(15, bit_15)
-	#GPIO.output(18, bit_18)
+	GPIO.output(14, bit_14)
+	GPIO.output(15, bit_15)
+	GPIO.output(18, bit_18)
 
 class DecisionModule:
 	'''
