@@ -15,12 +15,12 @@ from DistMatrix import createDistTable, createDistTableDict, loadDistTable, load
 from pathfinding import find_path
 from AvoidanceMap import cellAvoidanceMap
 
-import RPi.GPIO as GPIO
+#import RPi.GPIO as GPIO
 
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(14, GPIO.OUT)
-GPIO.setup(15, GPIO.OUT)
-GPIO.setup(18, GPIO.OUT)
+#GPIO.setmode(GPIO.BCM)
+#GPIO.setup(14, GPIO.OUT)
+#GPIO.setup(15, GPIO.OUT)
+#GPIO.setup(18, GPIO.OUT)
 
 def direction_from_delta(deltaRow, deltaCol):
 	if deltaRow == 1:
@@ -59,9 +59,9 @@ def send_to_teensey(direction):
 		bit_15 = 0
 		bit_18 = 1
 
-	GPIO.output(14, bit_14)
-	GPIO.output(15, bit_15)
-	GPIO.output(18, bit_18)
+	#GPIO.output(14, bit_14)
+	#GPIO.output(15, bit_15)
+	#GPIO.output(18, bit_18)
 
 class DecisionModule:
 	'''
@@ -95,7 +95,7 @@ class DecisionModule:
 		self.log = log
 		self.lastMovementTime = None
 		self.STUCK_THRESHOLD = 3 # seconds
-		self.prevLocation = (0, 0)
+		self.prevLocation = (23, 13) # initial location of pacbot
 
 	def update_target_loc(self):
 		'''
@@ -217,20 +217,20 @@ class DecisionModule:
 				# update the target location
 				self.update_target_loc()
 			elif self.state.pacmanLoc.row == self.prevLocation[0] and self.state.pacmanLoc.col == self.prevLocation[1]:
-				# if robot is stuck for a prolonged duration, move randomly
-				if self.lastMovementTime is None:
+    			# only start tracking time once we are playing
+				if self.lastMovementTime is None and self.state.gameMode != GameModes.PAUSED:
 					self.lastMovementTime = time()
-				if self.log:
-					print(f"Stuck for {time() - self.lastMovementTime} seconds")
-				if time() - self.lastMovementTime > self.STUCK_THRESHOLD:
+				elif self.lastMovementTime != None:
 					if self.log:
-						print("Stuck for too long, moving randomly")
-					direction = Directions.RANDOM
-					# WE DO NOT QUEUE ACTION BECAUSE WE ARE NOT TELLING SERVER RANDOM MOVEMENT
-					if self.state.gameMode != GameModes.PAUSED:
-						send_to_teensey(direction)
-					else:
-						send_to_teensey(Directions.NONE)
+						print(f"Stuck for {time() - self.lastMovementTime} seconds")
+					if (time() - self.lastMovementTime) > self.STUCK_THRESHOLD:
+						# If we are stuck for more than STUCK_THRESHOLD seconds, move randomly
+						direction = Directions.RANDOM
+						# we do not queue the action like below because RANDOM is only used in real life, not in the simulation
+						if self.state.gameMode != GameModes.PAUSED:
+							send_to_teensey(direction)
+						else:
+							send_to_teensey(Directions.NONE)
 			else:
 				# Otherwise, move towards the target location
 
