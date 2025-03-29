@@ -3,6 +3,7 @@ import asyncio
 
 import os
 import random
+from time import time
 
 # Game state
 from gameState import *
@@ -87,6 +88,9 @@ class DecisionModule:
 		self.distTable = loadDistTable()
 		self.dtDict = loadDistTableDict()
 		self.log = log
+		self.lastMovementTime = None
+		self.STUCK_THRESHOLD = 3 # seconds
+		self.prevLocation = (0, 0)
 
 	def update_target_loc(self):
 		'''
@@ -207,6 +211,11 @@ class DecisionModule:
 				# If we're at the target location, or the target locatipn is somehow unreachable from the current position,
 				# update the target location
 				self.update_target_loc()
+			elif self.state.pacmanLoc.row == self.prevLocation[0] and self.state.pacmanLoc.col == self.prevLocation[1]:
+				# if robot is stuck for a prolonged duration, move randomly
+				if time() - self.lastMovementTime > self.STUCK_THRESHOLD:
+					direction = Directions.RANDOM
+					send_to_teensey(direction)
 			else:
 				# Otherwise, move towards the target location
 
@@ -217,6 +226,7 @@ class DecisionModule:
 				# !TODO: In the future, this needs to be replaced by a call to the low level movement code
 				self.state.queueAction(1, direction)
 				send_to_teensey(direction)
+				self.lastMovementTime = time()
 				await asyncio.sleep(0.2)
 				
 
