@@ -220,7 +220,11 @@ class DecisionModule:
 				# if robot is stuck for a prolonged duration, move randomly
 				if self.lastMovementTime is None:
 					self.lastMovementTime = time()
-				elif time() - self.lastMovementTime > self.STUCK_THRESHOLD:
+				if self.log:
+					print(f"Stuck for {time() - self.lastMovementTime} seconds")
+				if time() - self.lastMovementTime > self.STUCK_THRESHOLD:
+					if self.log:
+						print("Stuck for too long, moving randomly")
 					direction = Directions.RANDOM
 					# WE DO NOT QUEUE ACTION BECAUSE WE ARE NOT TELLING SERVER RANDOM MOVEMENT
 					if self.state.gameMode != GameModes.PAUSED:
@@ -241,6 +245,7 @@ class DecisionModule:
 				else:
 					send_to_teensey(Directions.NONE)
 				self.lastMovementTime = time()
+				self.prevLocation = (self.state.pacmanLoc.row, self.state.pacmanLoc.col)
 				await asyncio.sleep(0.2)
 				
 
