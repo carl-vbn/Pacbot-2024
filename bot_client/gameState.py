@@ -7,6 +7,9 @@ from struct import unpack_from, pack
 # Internal representation of walls
 from walls import wallArr
 
+# Internal representation of intersections
+from intersections import intersectionArr
+
 # Buffer to collect messages to write to the server
 from collections import deque
 
@@ -77,7 +80,7 @@ class Location:
 	Location of an entity in the game engine
 	'''
 
-	def __init__(self, state, row = 32, col = 32) -> None: # type: ignore
+	def __init__(self, state) -> None: # type: ignore
 		'''
 		Construct a new location state object
 		'''
@@ -87,9 +90,9 @@ class Location:
 
 		# Row and column information
 		self.rowDir: int  = 0
-		self.row: int     = row
+		self.row: int     = 32
 		self.colDir: int  = 0
-		self.col: int     = col
+		self.col: int     = 32
 
 	def update(self, loc_uint16: int) -> None:
 		'''
@@ -182,11 +185,12 @@ class Location:
 		# Return none if no direction matches
 		return Directions.NONE
 	
-	def __eq__(self, other):
-		return self.row == other.row and self.col == other.col and self.rowDir == other.rowDir and self.colDir == other.colDir
-	
-	def __hash__(self):
-		return hash((self.row, self.col, self.rowDir, self.colDir))
+	def __str__(self) -> str:
+		'''
+		Print out the coordinates of the current location
+		'''
+
+		return f'({self.row}, {self.col})'
 
 class Ghost:
 	'''
@@ -205,7 +209,9 @@ class Ghost:
 		self.color: GhostColors = color
 		self.location: Location = Location(state) # type: ignore
 		self.frightSteps: int = 0
+		self.trappedSteps: int = 0
 		self.spawning: bool = bool(True)
+		self.eaten: bool = bool(True)
 
 		# (For simulation) Planned next direction the ghost will take
 		self.plannedDirection: Directions = Directions.NONE
@@ -217,6 +223,14 @@ class Ghost:
 
 		self.frightSteps = auxInfo & 0x3f
 		self.spawning = bool(auxInfo >> 7)
+  
+	def updateAux2(self, auxInfo: int) -> None:
+		'''
+		Update second auxiliary info (trapped steps and eaten flag, 1 byte)
+		'''
+
+		self.trappedSteps = auxInfo & 0x3f
+		self.eaten = bool(auxInfo >> 7)
 
 	def serializeAux(self) -> int:
 		'''
@@ -224,6 +238,13 @@ class Ghost:
 		'''
 
 		return (self.spawning << 7) | (self.frightSteps)
+
+	def serializeAux2(self) -> int:
+		'''
+		Serialize second auxiliary info (trapped steps and eaten flag, 1 byte)
+		'''
+
+		return (self.eaten << 7) | (self.trappedSteps)
 
 	def isFrightened(self) -> bool:
 		'''
@@ -398,6 +419,10 @@ class GameState:
 		# Internal representation of walls:
 		# 31 * 4 bytes = 31 * (32-bit integer bitset)
 		self.wallArr: list[int] = wallArr
+  
+		# Internal representation of intersections:
+		# 31 * 4 bytes = 31 * (32-bit integer bitset)
+		self.intersectionArr: list[int] = intersectionArr
 
 		#--- Important game state attributes (from game engine) ---#
 
@@ -417,11 +442,15 @@ class GameState:
 		self.modeSteps: int = 0
 		self.modeDuration: int = 255
 		self.format += 'BB'
+  
+		# 2 bytes
+		self.levelSteps: int = 960
+		self.format += 'H'
 
 		# 2 bytes
 		self.currScore: int = 0
 		self.format += 'H'
-
+  
 		# 1 byte
 		self.currLevel: int = 0
 		self.format += 'B'
@@ -429,10 +458,14 @@ class GameState:
 		# 1 byte
 		self.currLives: int = 3
 		self.format += 'B'
+  
+		# 1 byte
+		self.ghostCombo: int = 0
+		self.format += 'B'
 
-		# 4 * 3 bytes = 4 * (2 bytes location + 1 byte aux info)
+		# 4 * 4 bytes = 4 * (2 bytes location + 1 byte aux info + 1 byte second aux info)
 		self.ghosts: list[Ghost] = [Ghost(color, self) for color in GhostColors]
-		self.format += 'HBHBHBHB'
+		self.format += 'HBBHBBHBBHBB'
 
 		# 2 byte location
 		self.pacmanLoc: Location = Location(self)
@@ -511,25 +544,31 @@ class GameState:
 			self.gameMode,
 			self.modeSteps,
 			self.modeDuration,
+			self.levelSteps,
 			self.currScore,
 			self.currLevel,
 			self.currLives,
+			self.ghostCombo,
 
 			# Red ghost info
 			self.ghosts[GhostColors.RED].location.serialize(),
 			self.ghosts[GhostColors.RED].serializeAux(),
+			self.ghosts[GhostColors.RED].serializeAux2(),
 
 			# Pink ghost info
 			self.ghosts[GhostColors.PINK].location.serialize(),
 			self.ghosts[GhostColors.PINK].serializeAux(),
+			self.ghosts[GhostColors.PINK].serializeAux2(),
 
 			# Cyan ghost info
 			self.ghosts[GhostColors.CYAN].location.serialize(),
 			self.ghosts[GhostColors.CYAN].serializeAux(),
+			self.ghosts[GhostColors.CYAN].serializeAux2(),
 
 			# Orange ghost info
 			self.ghosts[GhostColors.ORANGE].location.serialize(),
 			self.ghosts[GhostColors.ORANGE].serializeAux(),
+			self.ghosts[GhostColors.ORANGE].serializeAux2(),
 
 			# Pacman location info
 			self.pacmanLoc.serialize(),
@@ -568,42 +607,48 @@ class GameState:
 		# General game info
 		self.currTicks    = unpacked[0]
 		self.updatePeriod = unpacked[1]
-		self.gameMode     = unpacked[2]
+		self.gameMode     = GameModes(unpacked[2])
 		self.modeSteps    = unpacked[3]
 		self.modeDuration = unpacked[4]
-		self.currScore    = unpacked[5]
-		if (self.currLevel != unpacked[6] or self.currLives != unpacked[7]) and self.currLives != 0 and self.resume:
+		self.levelSteps   = unpacked[5]
+		self.currScore    = unpacked[6]
+		if (self.currLevel != unpacked[7] or self.currLives != unpacked[8]) and self.currLives != 0 and self.resume:
 			should_resume = True # we have either lost a life or progressed to the next level, but we want to keep on playing because we are doing multiple simulations 
 			
-		self.currLevel    = unpacked[6]
-		self.currLives    = unpacked[7]
+		self.currLevel    = unpacked[7]
+		self.currLives    = unpacked[8]
+		self.ghostCombo   = unpacked[9]
 
 		# Red ghost info
-		self.ghosts[GhostColors.RED].location.update(unpacked[8])
-		self.ghosts[GhostColors.RED].updateAux(unpacked[9])
+		self.ghosts[GhostColors.RED].location.update(unpacked[10])
+		self.ghosts[GhostColors.RED].updateAux(unpacked[11])
+		self.ghosts[GhostColors.RED].updateAux2(unpacked[12])
 
 		# Pink ghost info
-		self.ghosts[GhostColors.PINK].location.update(unpacked[10])
-		self.ghosts[GhostColors.PINK].updateAux(unpacked[11])
+		self.ghosts[GhostColors.PINK].location.update(unpacked[13])
+		self.ghosts[GhostColors.PINK].updateAux(unpacked[14])
+		self.ghosts[GhostColors.PINK].updateAux2(unpacked[15])
 
 		# Cyan ghost info
-		self.ghosts[GhostColors.CYAN].location.update(unpacked[12])
-		self.ghosts[GhostColors.CYAN].updateAux(unpacked[13])
+		self.ghosts[GhostColors.CYAN].location.update(unpacked[16])
+		self.ghosts[GhostColors.CYAN].updateAux(unpacked[17])
+		self.ghosts[GhostColors.CYAN].updateAux2(unpacked[18])
 
 		# Orange ghost info
-		self.ghosts[GhostColors.ORANGE].location.update(unpacked[14])
-		self.ghosts[GhostColors.ORANGE].updateAux(unpacked[15])
+		self.ghosts[GhostColors.ORANGE].location.update(unpacked[19])
+		self.ghosts[GhostColors.ORANGE].updateAux(unpacked[20])
+		self.ghosts[GhostColors.ORANGE].updateAux2(unpacked[21])
 
 		# Pacman location info
-		self.pacmanLoc.update(unpacked[16])
+		self.pacmanLoc.update(unpacked[22])
 
 		# Fruit location info
-		self.fruitLoc.update(unpacked[17])
-		self.fruitSteps = unpacked[18]
-		self.fruitDuration = unpacked[19]
+		self.fruitLoc.update(unpacked[23])
+		self.fruitSteps = unpacked[24]
+		self.fruitDuration = unpacked[25]
 
 		# Pellet info
-		self.pelletArr = list[int](unpacked)[20:]
+		self.pelletArr = list[int](unpacked)[26:]
 
 		# Reset our guesses of the planned ghost directions
 		for ghost in self.ghosts:
@@ -623,7 +668,8 @@ class GameState:
 		'''
 		Helper function to check if a pellet is at a given location
 		'''
-
+		if self.wallAt(row, col):
+			return False
 		return bool((self.pelletArr[row] >> col) & 1)
 
 	def superPelletAt(self, row: int, col: int) -> bool:
@@ -717,6 +763,18 @@ class GameState:
 
 		# Return whether there is a wall at the location
 		return bool((self.wallArr[row] >> col) & 1)
+
+	def intersectionAt(self, row: int, col: int) -> bool:
+		'''
+		Helper function to check if a wall is at a given location
+		'''
+
+		# Check if the position is off the grid, and return true if so
+		if (row < 0 or row >= 31) or (col < 0 or col >= 28):
+			return True
+
+		# Return whether there is a wall at the location
+		return bool((self.intersectionArr[row] >> col) & 1)
 
 	def display(self):
 		'''
