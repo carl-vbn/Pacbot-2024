@@ -133,9 +133,7 @@ class DecisionModule:
   
 		# pacbot evaluates more options as it gets closer to the end of the level
 		# (tunable ofc)
-		if n > 200:
-			radius = 5
-		elif n > 100:
+		if n > 100:
 			radius = 10
 		elif n > 50:
 			radius = 15
@@ -215,7 +213,7 @@ class DecisionModule:
 				# !TODO: In the future, this needs to be replaced by a call to the low level movement code
 				self.state.queueAction(1, direction)
 				send_to_teensey(direction)
-				await asyncio.sleep(0.1)
+				await asyncio.sleep(0.2)
 				
 
 

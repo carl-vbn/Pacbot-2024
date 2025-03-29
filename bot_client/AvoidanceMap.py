@@ -42,7 +42,7 @@ class cellAvoidanceMap:
             if self.num_pellets <= 150:
                 return self.superPellet_boost
             else:
-                return 0
+                return -self.superPellet_boost # negative because we want to avoid it in the early game
                     
         if not self.g.pelletAt(tile[0], tile[1]):
             return 0
@@ -68,6 +68,18 @@ class cellAvoidanceMap:
             boost *= 3
         elif self.num_pellets < 100:
             boost *= 2
+            
+        # boosted tiles for a guided early game
+        boosted_tiles = {
+            (26, 6): 3,
+            (29, 1): 2,
+            (29, 9): 2,
+            (29, 18): 2,
+            (29, 26): 2,
+        }
+        
+        if tile in boosted_tiles:
+            boost *= boosted_tiles[tile]
         
         return boost
     
