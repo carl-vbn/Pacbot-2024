@@ -304,16 +304,11 @@ func (gs *gameState) movePacmanDir(dir uint8) {
 
 // Move pacman to destination along shortest path (CV update)
 func (gs *gameState) movePacmanAbsolute(newRow, newCol int8) {
-	// Lock control over Pacman object and release at end
-	gs.muPacman.Lock()
-	defer gs.muPacman.Unlock()
-
-
 	// Don't update position if we're paused
 	if gs.isPaused() || gs.getPauseOnUpdate() {
 		return
 	}
-	
+
 	// Reject invalid coords
 	if gs.wallAt(newRow, newCol) {
 		return
@@ -336,31 +331,53 @@ func (gs *gameState) movePacmanAbsolute(newRow, newCol int8) {
 	}
 
 	// The new position is far from the old one, let's not traverse the path
-	if len(path) > 5 {
-		log.Println("\033[33mWARN: Interpolated path too long! "+
+	if len(path) > 11 {
+		log.Println("\033[35mWARN: Interpolated path too long! " +
 			"Tracking performance is likely degraded\033[0m")
 
+		// Acquire the Pacman control lock, to prevent other Pacman movement
+		gs.muPacman.Lock()
+		defer func() {
+			// Unlock when we return
+			gs.muPacman.Unlock()
+
+			// Check collisions with all the ghosts
+			gs.checkCollisions()
+		}()
+
+		// Move Pacman directly to the given position
 		pLoc.updateCoords(newRow, newCol)
 		gs.collectPellet(newRow, newCol)
 
-		// Check collisions with ghosts
-		gs.checkCollisions()
 		return
 	}
 
+	prevPos := pos{gs.pacmanLoc.row, gs.pacmanLoc.col}
 	// Move Pacman along the detected route
 	for i := range path {
 		nextPos := path[i]
-		r, c := nextPos.r, nextPos.c
-		pLoc.updateCoords(r, c)
-		gs.collectPellet(r, c)
-
-		// Check collisions with ghosts
-		gs.checkCollisions()
+		if nextPos.r < prevPos.r {
+			gs.movePacmanDir(up)
+			gs.checkCollisions()
+			gs.collectPellet(gs.pacmanLoc.getCoords())
+		} else if nextPos.c < prevPos.c {
+			gs.movePacmanDir(left)
+			gs.checkCollisions()
+			gs.collectPellet(gs.pacmanLoc.getCoords())
+		} else if nextPos.r > prevPos.r {
+			gs.movePacmanDir(down)
+			gs.checkCollisions()
+			gs.collectPellet(gs.pacmanLoc.getCoords())
+		} else {
+			gs.movePacmanDir(right)
+			gs.checkCollisions()
+			gs.collectPellet(gs.pacmanLoc.getCoords())
+		}
+		prevPos = nextPos
 	}
 }
 
-type pos struct {r, c int8}
+type pos struct{ r, c int8 }
 
 func (p pos) getAdjacent() [4]pos {
 	return [...]pos{
@@ -384,11 +401,12 @@ func (gs *gameState) findLikelyPath(newRow, newCol int8) []pos {
 	target := pos{newRow, newCol}
 
 	// Keep searching until we have exhausted all options or found it
-	search_loop: for len(queue) != 0 {
+search_loop:
+	for len(queue) != 0 {
 		// Peek top, and remove
 		curr := queue[0]
 		queue = queue[1:]
-		
+
 		// Find adjacencies/neighbors of current cell
 		neighbors := curr.getAdjacent()
 		for i := range neighbors {
@@ -418,15 +436,15 @@ func (gs *gameState) findLikelyPath(newRow, newCol int8) []pos {
 	}
 
 	// Backtrack the path
-	path := []pos{target}
-	for last, ok := target, true; ok && last != start; last, ok = parent[last] {
+	path := []pos{}
+	for last := target; last != start; last = parent[last] {
 		path = append(path, last)
 	}
 
 	// Something has gone horribly wrong, last node doesnt backtrack to start
-	if parent[path[len(path) - 1]] != start {
+	if parent[path[len(path)-1]] != start {
 		return nil
-	} 
+	}
 	slices.Reverse(path)
 	return path
 }
