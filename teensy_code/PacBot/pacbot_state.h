@@ -12,9 +12,10 @@
 
 // Config
 #define BASE_SPEED 150
-#define DANGER_SPEED 80 // Danger means an obstacle is detected ahead
-#define BACKOFF_SPEED 80 // Speed while reversing
-#define OPTIMAL_FRONT_DIST 50
+#define DANGER_SPEED 78 // Danger means an obstacle is detected ahead
+#define BACKOFF_SPEED 90 // Speed while reversing
+#define MIN_FRONT_DIST 7
+#define MAX_FRONT_DIST 15
 #define LATERAL_CORRECTION_SPEED 60
 #define ROTATIONAL_CORRECTION_SPEED 70
 
@@ -22,6 +23,8 @@ typedef struct {
   uint8_t dir;
   bool stopped;
   long pause_time;
+  long backoff_time;
+  bool wall_detected;
 } pb_state_t;
 
 pb_state_t bot_state;
@@ -31,6 +34,9 @@ int target_dist_sum; // Sum of left and right sensor values when aligned with wa
 bool rot_dir;
 long rot_end_time;
 int dist_err_prerot;
+int target_right_dist;
+int target_left_dist;
+long recovery_counter;
 
 #define READ_DIR_DIST(dir) (sensors[(dir)].readRangeContinuous())
 #define READ_SIDE_DIST(side) (sensors[(bot_state.dir + (side)) % 4].readRangeContinuous())
@@ -44,9 +50,12 @@ void init_state() {
   bot_state.dir = NORTH;
   bot_state.stopped = true;
   bot_state.pause_time = 0;
+  bot_state.backoff_time = 0;
+  bot_state.wall_detected = false;
 
   rot_dir = false;
   rot_end_time = 0;
+  recovery_counter = 0;
 }
 
 #define STOP() bot_state.stopped = true
@@ -57,20 +66,51 @@ void init_state() {
 #define TURN_RIGHT() bot_state.dir = (bot_state.dir + 1) % 4
 #define TURN_LEFT() bot_state.dir = (bot_state.dir + 3) % 4
 
+void calibrate() {
+  uint8_t backDist = READ_SIDE_DIST(BACK);
+  uint8_t frontDist = READ_SIDE_DIST(FRONT);
+  uint8_t leftDist = READ_SIDE_DIST(LEFT);
+  uint8_t rightDist = READ_SIDE_DIST(RIGHT);
+  int current_dist_sum = rightDist + leftDist;
+
+  target_dist_sum = current_dist_sum;
+  target_right_dist = rightDist;
+  target_left_dist = leftDist;
+}
+
 void movement_tick(long delta_time, int gpioVal) {
   uint8_t backDist = READ_SIDE_DIST(BACK);
   uint8_t frontDist = READ_SIDE_DIST(FRONT);
   uint8_t leftDist = READ_SIDE_DIST(LEFT);
   uint8_t rightDist = READ_SIDE_DIST(RIGHT);
   int current_dist_sum = rightDist + leftDist;
-  int rightShift = leftDist - rightDist;
-  bool rightVoid = rightDist > 250;
-  bool leftVoid = leftDist > 250;
+  int rightShift = (leftDist - target_left_dist) + (target_right_dist - rightDist);
+  bool rightVoid = abs(target_right_dist - rightDist) >= 10;
+  bool leftVoid = abs(leftDist - target_left_dist) >= 10;
   bool anyVoid = leftVoid || rightVoid;
   bool allVoid = rightVoid && leftVoid && frontDist > 250 && backDist > 250;
 
+  if (frontDist < 255 && !bot_state.wall_detected) {
+    PAUSE(1000);
+    bot_state.wall_detected = true;
+  }
+
+  if (frontDist >= 255 && bot_state.wall_detected) {
+    bot_state.wall_detected = false;
+  }
+
+  // Serial.print(rightVoid);
+  // Serial.println(leftVoid);
+
+  // Serial.print(abs(leftDist - target_left_dist));
+  // Serial.print(" ");
+  // Serial.println(abs(target_right_dist - rightDist));
+  // Serial.print(" ");
+  // Serial.print(backDist);
+  // Serial.print(" ");
+  // Serial.println(leftDist);
+
   if (bot_state.stopped) {
-    target_dist_sum = current_dist_sum;
     m_stop();
     return;
   }
@@ -78,6 +118,23 @@ void movement_tick(long delta_time, int gpioVal) {
   if (bot_state.pause_time > 0) {
     m_stop();
     bot_state.pause_time -= delta_time;
+
+    if (bot_state.pause_time < 0) {
+      bot_state.pause_time = 0;
+    }
+
+    return;
+  }
+
+  if (bot_state.backoff_time > 0) {
+    MOVE_SIDE(BACK, BACKOFF_SPEED, 0);
+    bot_state.backoff_time -= delta_time;
+
+    if (bot_state.backoff_time < 0) {
+      bot_state.backoff_time = 0;
+      PAUSE(300);
+    }
+
     return;
   }
 
@@ -85,9 +142,10 @@ void movement_tick(long delta_time, int gpioVal) {
   int lateralSpeed = 0;
   int rotation = 0;
 
-  if (frontDist < OPTIMAL_FRONT_DIST) {
-    frontSpeed = -BACKOFF_SPEED; 
-  } else {
+  if (frontDist < MIN_FRONT_DIST) {
+    // frontSpeed = -BACKOFF_SPEED; 
+    bot_state.backoff_time += 70;
+  } else if (frontDist > MAX_FRONT_DIST) {
     frontSpeed = frontDist < 255 ? DANGER_SPEED : BASE_SPEED;
   }
 
@@ -95,8 +153,10 @@ void movement_tick(long delta_time, int gpioVal) {
   long now = millis();
   int dist_sum_error = abs(current_dist_sum - target_dist_sum);
 
-  if (!rightVoid && !leftVoid) {
-    if (dist_sum_error > 10) {
+  // Serial.println(dist_sum_error);
+
+  if (frontSpeed > 0 && !rightVoid && !leftVoid) {
+    if (dist_sum_error > 5) {
       // Rotational alignment
       frontSpeed = 0;
       if (now > rot_end_time) {
@@ -104,11 +164,11 @@ void movement_tick(long delta_time, int gpioVal) {
           rot_dir = !rot_dir;
         
         dist_err_prerot = dist_sum_error;
-        rot_end_time = now + 50;
+        rot_end_time = now + 15;
       }
       if (rot_dir) rotation = ROTATIONAL_CORRECTION_SPEED;
       else rotation = -ROTATIONAL_CORRECTION_SPEED;
-    } else if (abs(rightShift) > 10) {
+    } else if (abs(rightShift) > 3) {
       // Lateral alignment
       if (rightShift > 0) {
         lateralSpeed = -LATERAL_CORRECTION_SPEED;
@@ -118,5 +178,14 @@ void movement_tick(long delta_time, int gpioVal) {
     }
   }
   
+  // Serial.println(frontSpeed);
   m_compound(bot_state.dir, frontSpeed, lateralSpeed, rotation);
+}
+
+void recovery(long delta_time) {
+  recovery_counter += delta_time;
+  if (recovery_counter > 3000) {
+    TURN_RIGHT();
+    recovery_counter = 0;
+  }
 }

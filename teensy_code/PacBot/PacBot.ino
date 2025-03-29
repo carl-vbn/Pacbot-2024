@@ -19,15 +19,15 @@ void setup()
   init_motors();
 
   init_state();
-  handshake_progress = 3;
+  handshake_progress = 0;
 
   digitalWrite(LED_BUILTIN, HIGH);
 
   Serial.println("Setup complete");
 
-  SYNC_BEEP(100);
-  delay(100);
-  SYNC_BEEP(100);
+  // SYNC_BEEP(100);
+  // delay(100);
+  // SYNC_BEEP(100);
 }
 
 long last_tick_time = 0;
@@ -51,6 +51,7 @@ void loop() {
     } else if (handshake_progress == 2) {
       if (gpioVal == 0) {
         handshake_progress++;
+        calibrate();
 
         SYNC_BEEP(400);
         delay(100);
@@ -70,7 +71,16 @@ void loop() {
   } else if (gpioVal <= 4) {
     START();
     SET_DIR(gpioVal - 1);
-  } // TODO Implement turning
+  } else if (gpioVal == 5) {
+    init_state();
+    calibrate();
+    STOP();
+    SYNC_BEEP(80);
+    delay(80);
+  } else if (gpioVal == 6) {
+    START();
+    recovery(now - last_tick_time);
+  } 
 
   movement_tick(now - last_tick_time, gpioVal);
   last_tick_time = now;
