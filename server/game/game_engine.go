@@ -33,7 +33,7 @@ func NewGameEngine(_webOutputCh chan<- []byte, _webInputCh <-chan []byte,
 	// Time between ticks
 	_tickTime := 1000000 * time.Microsecond / time.Duration(clockRate)
 	ge := GameEngine{
-		quitCh:      make(chan struct{}, 0),
+		quitCh:      make(chan struct{}),
 		webOutputCh: _webOutputCh,
 		webInputCh:  _webInputCh,
 		state:       newGameState(),
@@ -61,11 +61,6 @@ func (ge *GameEngine) quit() {
 // Quit function exported to other packages
 func (ge *GameEngine) Quit() {
 	close(ge.quitCh)
-	muAGE.Lock()
-	{
-		activeGameEngines--
-	}
-	muAGE.Unlock()
 }
 
 // Start the game engine - should be launched as a go-routine
@@ -169,11 +164,13 @@ func (ge *GameEngine) RunLoop() {
 			select {
 			// If we get a message from the web broker, handle it
 			case msg := <-ge.webInputCh:
-				ge.state.interpretCommand(msg)
-				if msg[0] == 'r' || msg[0] == 'R' {
-					log.Printf("\033[35mLOG:  Game restarted\033[0m")
+				rst := ge.state.interpretCommand(msg)
+				if rst { // Reset if necessary
 					ge.state = newGameState()
-					ge.state.play()
+					ge.state.updateAllGhosts()
+					ge.state.handleStepEvents()
+					ge.state.planAllGhosts()
+					justTicked = true
 				}
 			default:
 				break read_loop

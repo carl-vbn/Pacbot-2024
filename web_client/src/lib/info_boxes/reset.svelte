@@ -18,7 +18,7 @@
     width:       calc(5   * var(--grid-size));
     height:      calc(3   * var(--grid-size));
     line-height: calc(3   * var(--grid-size));
-    left:        510px;
+    left:        950px;
     top:         10px;
     font-size:   calc(0.9 * var(--grid-size));
     font-family: 'Courier New', Courier, monospace;

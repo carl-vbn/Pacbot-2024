@@ -14,16 +14,23 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  :global(body) {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
   .maze-space {
 
     /* Positioning */
     position: absolute;
-    top: 5vh;
-    left: 10vw;
+    transform: translate(50%, 50%);
+    bottom: 50%;
+    right: 50%;
   }
 
   :global(.path) {
-    border: 1px solid cyan !important;
+      border: 1px solid cyan !important;
   }
 
 </style>
@@ -54,7 +61,6 @@
   var botSocket = new WebSocket(`ws://${config.BotIP}:${config.BotSocketPort}`);
 
   socket.binaryType = 'arraybuffer';
-
   let socketOpen = false;
   let botSocketOpen = false;
 
@@ -69,6 +75,88 @@
       pelletGrid[row][col] = 0;
     }
   }
+
+  /*
+    This generates an array of intersection labels
+  */
+  const intersections = [
+    0b0000_0000000000000000000000000000, // row 0
+    0b0000_0100001000001001000001000010, // row 1
+    0b0000_0000000000000000000000000000, // row 2
+    0b0000_0000000000000000000000000000, // row 3
+    0b0000_0000000000000000000000000000, // row 4
+    0b0000_0100001001001001001001000010, // row 5
+    0b0000_0000000000000000000000000000, // row 6
+    0b0000_0000000000000000000000000000, // row 7
+    0b0000_0100001001001001001001000010, // row 8
+    0b0000_0000000000000000000000000000, // row 9
+    0b0000_0000000000000000000000000000, // row 10
+    0b0000_0000000001001001001000000000, // row 11
+    0b0000_0000000000000000000000000000, // row 12
+    0b0000_0000000000000000000000000000, // row 13
+    0b0000_0000001001000000001001000000, // row 14
+    0b0000_0000000000000000000000000000, // row 15
+    0b0000_0000000000000000000000000000, // row 16
+    0b0000_0000000001000010001000000000, // row 17
+    0b0000_0000000000000000000000000000, // row 18
+    0b0000_0000000000000000000000000000, // row 19
+    0b0000_0100001001001001001001000010, // row 20
+    0b0000_0000000000000000000000000000, // row 21
+    0b0000_0000000000000000000000000000, // row 22
+    0b0000_0101001001001001001001001010, // row 23
+    0b0000_0000000000000000000000000000, // row 24
+    0b0000_0000000000000000000000000000, // row 25
+    0b0000_0101001001001001001001001010, // row 26
+    0b0000_0000000000000000000000000000, // row 27
+    0b0000_0000000000000000000000000000, // row 28
+    0b0000_0100000000001001000000000010, // row 29
+    0b0000_0000000000000000000000000000  // row 30
+  ];
+
+  let intersectionGrid = [];
+  for (let row = 0; row < 31; row++) {
+    intersectionGrid[row] = [];
+    for (let col = 0; col < 28; col++) {
+      intersectionGrid[row][col] = ((intersections[row] >> col) & 1) ? 1 : 0;
+    }
+  }
+
+  /*
+    This generates an array of wall labels
+  */
+  const walls = [
+    0b0000_1111111111111111111111111111, // row 0
+    0b0000_1000000000000110000000000001, // row 1
+    0b0000_1011110111110110111110111101, // row 2
+    0b0000_1011110111110110111110111101, // row 3
+    0b0000_1011110111110110111110111101, // row 4
+    0b0000_1000000000000000000000000001, // row 5
+    0b0000_1011110110111111110110111101, // row 6
+    0b0000_1011110110111111110110111101, // row 7
+    0b0000_1000000110000110000110000001, // row 8
+    0b0000_1111110111110110111110111111, // row 9
+    0b0000_1111110111110110111110111111, // row 10
+    0b0000_1111110110000000000110111111, // row 11
+    0b0000_1111110110111111110110111111, // row 12
+    0b0000_1111110110111111110110111111, // row 13
+    0b0000_1111110000111111110000111111, // row 14
+    0b0000_1111110110111111110110111111, // row 15
+    0b0000_1111110110111111110110111111, // row 16
+    0b0000_1111110110000000000110111111, // row 17
+    0b0000_1111110110111111110110111111, // row 18
+    0b0000_1111110110111111110110111111, // row 19
+    0b0000_1000000000000110000000000001, // row 20
+    0b0000_1011110111110110111110111101, // row 21
+    0b0000_1011110111110110111110111101, // row 22
+    0b0000_1000110000000000000000110001, // row 23
+    0b0000_1110110110111111110110110111, // row 24
+    0b0000_1110110110111111110110110111, // row 25
+    0b0000_1000000110000110000110000001, // row 26
+    0b0000_1011111111110110111111111101, // row 27
+    0b0000_1011111111110110111111111101, // row 28
+    0b0000_1000000000000000000000000001, // row 29
+    0b0000_1111111111111111111111111111  // row 30
+  ];
 
   /*
     We use a circular queue (with a fixed max capacity to keep track of the
@@ -115,6 +203,9 @@
     Offline:  10,
   }
 
+  // Keep track of the level steps (from the server)
+  let levelSteps = 960;
+
   // Keep track of the current score (from the server)
   let currScore = 0;
 
@@ -123,6 +214,9 @@
 
   // Keep track of the current lives (from the server)
   let currLives = 1;
+
+  // Keep track of the ghost combo (from the server)
+  let ghostCombo = 0;
 
   // Local object to encode the starting states
   const Directions = {
@@ -144,18 +238,22 @@
   let redRowState = 11;
   let redColState = 13 | Directions.Left; // left
   let redFrightState = 0 | 128;
+  let redTrappedState = 0 | 128;
 
   let pinkRowState = 13 | Directions.Down; // down
   let pinkColState = 13;
   let pinkFrightState = 0 | 128;
+  let pinkTrappedState = 0 | 128;
 
   let cyanRowState = 14 | Directions.Up; // up
   let cyanColState = 11;
   let cyanFrightState = 0 | 128;
+  let cyanTrappedState = 0 | 128;
 
   let orangeRowState = 14 | Directions.Up; // up
   let orangeColState = 15;
   let orangeFrightState = 0 | 128;
+  let orangeTrappedState = 0 | 128;
 
   // Handling a new connection
   socket.addEventListener('open', (_) => {
@@ -205,6 +303,9 @@
         modeSteps         = view.getUint8(byteIdx++, false);
         modeDuration      = view.getUint8(byteIdx++, false);
 
+        // Get the level steps from the server
+        levelSteps        = view.getUint16(byteIdx, false); byteIdx += 2;
+
         // Get the current score from the server
         currScore         = view.getUint16(byteIdx, false); byteIdx += 2;
 
@@ -214,19 +315,26 @@
         // Get the current lives from the server
         currLives         = view.getUint8(byteIdx++, false);
 
+        // Get the ghost combo from the server
+        ghostCombo        = view.getUint8(byteIdx++, false);
+
         // Parse ghost data
-        redRowState       = view.getUint8(byteIdx++, false);
-        redColState       = view.getUint8(byteIdx++, false);
-        redFrightState    = view.getUint8(byteIdx++, false);
-        pinkRowState      = view.getUint8(byteIdx++, false);
-        pinkColState      = view.getUint8(byteIdx++, false);
-        pinkFrightState   = view.getUint8(byteIdx++, false);
-        cyanRowState      = view.getUint8(byteIdx++, false);
-        cyanColState      = view.getUint8(byteIdx++, false);
-        cyanFrightState   = view.getUint8(byteIdx++, false);
-        orangeRowState    = view.getUint8(byteIdx++, false);
-        orangeColState    = view.getUint8(byteIdx++, false);
-        orangeFrightState = view.getUint8(byteIdx++, false);
+        redRowState        = view.getUint8(byteIdx++, false);
+        redColState        = view.getUint8(byteIdx++, false);
+        redFrightState     = view.getUint8(byteIdx++, false);
+        redTrappedState    = view.getUint8(byteIdx++, false);
+        pinkRowState       = view.getUint8(byteIdx++, false);
+        pinkColState       = view.getUint8(byteIdx++, false);
+        pinkFrightState    = view.getUint8(byteIdx++, false);
+        pinkTrappedState   = view.getUint8(byteIdx++, false);
+        cyanRowState       = view.getUint8(byteIdx++, false);
+        cyanColState       = view.getUint8(byteIdx++, false);
+        cyanFrightState    = view.getUint8(byteIdx++, false);
+        cyanTrappedState   = view.getUint8(byteIdx++, false);
+        orangeRowState     = view.getUint8(byteIdx++, false);
+        orangeColState     = view.getUint8(byteIdx++, false);
+        orangeFrightState  = view.getUint8(byteIdx++, false);
+        orangeTrappedState = view.getUint8(byteIdx++, false);
 
         // Parse Pacman data
         pacmanRowState    = view.getUint8(byteIdx++, false);
@@ -345,7 +453,6 @@
     }
   });
 
-
   // Event on close
   socket.addEventListener('close', (_) => {
     socketOpen = false;
@@ -363,8 +470,7 @@
   // Track the size of the window, to determine the grid size
   let innerWidth = 0;
   let innerHeight = 0;
-  $: gridSize = 0.8 * ((innerHeight * 28 < innerWidth * 31) ?
-    (innerHeight / 31) : (innerWidth / 28))
+  $: gridSize = Math.min(innerHeight / 31, innerWidth / 28)
 
   // Calculate the remainder when currTicks is divided by updatePeriod
   $: modTicks = currTicks % updatePeriod
@@ -383,11 +489,11 @@
     } else if (key === 'P' && gameMode === Modes.Paused) {
       mediaControlKeyHeld = true;
       return 'P';
-    } else if (key === 'r') {
-      return 'r';
     } else if (key === ' ' && !mediaControlKeyHeld) {
       mediaControlKeyHeld = true;
       return (gameMode === Modes.Paused ? 'P' : 'p');
+    } else if (key === 'Escape') {
+      return 'r';
     }
     return null;
   }
@@ -401,24 +507,89 @@
       have elapsed since the last motion key, ignore this key
     */
     if ((4 * (currTicks - lastMotionTicks) < updatePeriod)) {
+      if (currTicks === 0) {
+        lastMotionTicks = currTicks;
+      }
       return null;
     }
+
+    const checkViolation = (rowDir, colDir, steps) => {
+      let newRow = (pacmanRowState & 31) + rowDir * steps;
+      let newCol = (pacmanColState & 31) + colDir * steps;
+      if ((walls[newRow] >> (newCol)) & 1) {
+        // console.log('wall violation', (pacmanRowState & 0b11111) - 1, (pacmanColState & 0b11111))
+        return true;
+      }
+      return false;
+    };
+
+    const checkIntersection = (rowDir, colDir, steps) => {
+      let newRow = (pacmanRowState & 31) + rowDir * steps;
+      let newCol = (pacmanColState & 31) + colDir * steps;
+      if ((intersections[newRow] >> (newCol)) & 1) {
+        // console.log('valid intersection found', (pacmanRowState & 0b11111) - 1, (pacmanColState & 0b11111))
+        return [newRow, newCol];
+      }
+      return [32, 32];
+    };
 
     /*
       If motion-related keys are pressed, reset the cooldown and
       send the command back to the keydown handler
     */
+    let rowDir = 0;
+    let colDir = 0;
     if (key === 'w' || key === 'ArrowUp') {
       lastMotionTicks = currTicks;
+      rowDir = -1;
+      colDir = 0;
+      if (shiftKeyHeld) {
+        for (let steps = 1; !checkViolation(rowDir, colDir, steps); steps++) {
+          var [newRow, newCol] = checkIntersection(rowDir, colDir, steps);
+          if (newRow < 32 && newCol < 32) {
+            return 'x' + String.fromCharCode(newRow) + String.fromCharCode(newCol);
+          }
+        }
+      }
       return 'w';
     } else if (key === 'a' || key === 'ArrowLeft') {
       lastMotionTicks = currTicks;
+      rowDir = 0;
+      colDir = -1;
+      if (shiftKeyHeld) {
+        for (let steps = 1; !checkViolation(rowDir, colDir, steps); steps++) {
+          var [newRow, newCol] = checkIntersection(rowDir, colDir, steps);
+          if (newRow < 32 && newCol < 32) {
+            return 'x' + String.fromCharCode(newRow) + String.fromCharCode(newCol);
+          }
+        }
+      }
       return 'a';
     } else if (key === 's' || key === 'ArrowDown') {
       lastMotionTicks = currTicks;
+      rowDir = 1;
+      colDir = 0;
+      if (shiftKeyHeld) {
+        for (let steps = 1; !checkViolation(rowDir, colDir, steps); steps++) {
+          var [newRow, newCol] = checkIntersection(rowDir, colDir, steps);
+          if (newRow < 32 && newCol < 32) {
+            return 'x' + String.fromCharCode(newRow) + String.fromCharCode(newCol);
+          }
+        }
+      }
       return 's';
     } else if (key === 'd' || key === 'ArrowRight') {
       lastMotionTicks = currTicks;
+      rowDir = 0;
+      colDir = 1;
+      if (shiftKeyHeld) {
+        for (let steps = 1; !checkViolation(rowDir, colDir, steps); steps++) {
+          var [newRow, newCol] = checkIntersection(rowDir, colDir, steps);
+          if (newRow < 32 && newCol < 32) {
+            return 'x' + String.fromCharCode(newRow) + String.fromCharCode(newCol);
+          }
+        }
+      }
       return 'd';
     }
     return null;
@@ -442,6 +613,12 @@
     sendToSocket('R');
   }
 
+  // Showing intersections
+  let showIntersections = false;
+
+  // Shift key held
+  let shiftKeyHeld = false;
+
   // Handle key presses, to send responses back to the server
   const handleKeyDown = (event) => {
 
@@ -459,6 +636,14 @@
     if (motion) {
       sendToSocket(motion);
     }
+
+    else if (key === 'i') {
+      console.log('toggling intersections')
+      showIntersections = !showIntersections;
+    } else if (key == 'Shift') {
+      // console.log('holding shift');
+      shiftKeyHeld = true;
+    }
   }
 
   // Handle key releases, for allowing toggle commands to be sent again
@@ -469,6 +654,9 @@
 
     if (key === 'p' || key === 'P' || key === ' ') {
       mediaControlKeyHeld = false;
+    } else if (key == 'Shift') {
+      // console.log('releasing shift');
+      shiftKeyHeld = false;
     }
   }
 
@@ -491,6 +679,8 @@
     {pelletGrid}
     {gridSize}
     {botSocket}
+    {intersectionGrid}
+    {showIntersections}
   />
 
   <Fruit
@@ -572,11 +762,9 @@
   />
 
   <Reset
-  {gridSize}
-  {toggleReset}
-/>
-
-
+    {gridSize}
+    {toggleReset}
+  />
 
   <Score
     {gridSize}
