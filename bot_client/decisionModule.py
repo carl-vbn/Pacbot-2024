@@ -94,7 +94,7 @@ class DecisionModule:
 		self.dtDict = loadDistTableDict()
 		self.log = log
 		self.lastMovementTime = None
-		self.STUCK_THRESHOLD = 5 # seconds
+		self.STUCK_THRESHOLD = 3 # seconds
 		self.prevLocation = (23, 13) # initial location of pacbot
 
 	def update_target_loc(self):
