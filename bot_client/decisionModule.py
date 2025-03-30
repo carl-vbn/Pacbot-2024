@@ -15,12 +15,13 @@ from DistMatrix import createDistTable, createDistTableDict, loadDistTable, load
 from pathfinding import find_path
 from AvoidanceMap import cellAvoidanceMap
 
-import RPi.GPIO as GPIO
+# UNCOMMENT GPIO CODE IF RUNNING ON ACTUAL ROBOT (NOT SIMULATOR)
+#import RPi.GPIO as GPIO
 
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(14, GPIO.OUT)
-GPIO.setup(15, GPIO.OUT)
-GPIO.setup(18, GPIO.OUT)
+#GPIO.setmode(GPIO.BCM)
+#GPIO.setup(14, GPIO.OUT)
+#GPIO.setup(15, GPIO.OUT)
+#GPIO.setup(18, GPIO.OUT)
 
 def direction_from_delta(deltaRow, deltaCol):
 	if deltaRow == 1:
@@ -59,9 +60,9 @@ def send_to_teensey(direction):
 		bit_15 = 0
 		bit_18 = 1
 
-	GPIO.output(14, bit_14)
-	GPIO.output(15, bit_15)
-	GPIO.output(18, bit_18)
+	#GPIO.output(14, bit_14)
+	#GPIO.output(15, bit_15)
+	#GPIO.output(18, bit_18)
 
 class DecisionModule:
 	'''

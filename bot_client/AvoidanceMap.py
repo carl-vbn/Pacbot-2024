@@ -39,10 +39,10 @@ class cellAvoidanceMap:
         
         # TODO: account for how nearby ghosts are to the super pellet
         if self.g.superPelletAt(tile[0], tile[1]):
-            if self.num_pellets <= 150:
+            if self.num_pellets <= 200:
                 return self.superPellet_boost
             else:
-                return self.superPellet_boost # negative because we want to avoid it in the early game
+                return -self.superPellet_boost # negative because we want to avoid it in the early game
                     
         if not self.g.pelletAt(tile[0], tile[1]):
             return 0
@@ -69,28 +69,24 @@ class cellAvoidanceMap:
         elif self.num_pellets < 100:
             boost *= 2
             
-        # boosted tiles for a guided early game
-        boosted_tiles = {
+        # preset routes for the very early game
+            
+        route_one = {
             (26, 6): 10,
             (29, 1): 8,
             (29, 9): 6,
             (29, 18): 4,
             (29, 26): 2,
-            (23, 2): -4,
-            (23, 3): -4,
-            (24, 3): -4,
-            (23, 24): 0.5,
-            (3, 21): -4,
-            (3, 15): -4,
-            (3, 12): -4,
-            (10, 6): -4,
-            (17, 21): -4,
-            (3, 26): 0.5,
-            (10, 21): 0.5,
-            (3, 6): 0.5,
-            (23, 24): 0.5,
-            (23, 25): 0.5,
         }
+        
+        route_two = {
+            (23, 6): 10,
+            (15, 6): 8,
+            (8, 6): 6,
+            (8, 1): 4,
+        }
+        
+        boosted_tiles = route_one
         
         if tile in boosted_tiles:
             boost *= boosted_tiles[tile]
