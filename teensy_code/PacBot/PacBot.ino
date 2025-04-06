@@ -28,6 +28,8 @@ void setup()
   // SYNC_BEEP(100);
   // delay(100);
   // SYNC_BEEP(100);
+  
+  randomSeed(515613);
 }
 
 long last_tick_time = 0;
@@ -71,6 +73,9 @@ void loop() {
   } else if (gpioVal <= 4) {
     START();
     SET_DIR(gpioVal - 1);
+    recovery_counter = 0;
+    // START();
+    // recovery(now - last_tick_time);
   } else if (gpioVal == 5) {
     init_state();
     calibrate();
@@ -79,6 +84,7 @@ void loop() {
     delay(80);
   } else if (gpioVal == 6) {
     START();
+    // m_clockwise(ROTATIONAL_CORRECTION_SPEED);
     recovery(now - last_tick_time);
   } 
 

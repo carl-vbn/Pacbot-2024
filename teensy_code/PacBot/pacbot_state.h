@@ -11,13 +11,13 @@
 #define LEFT  3
 
 // Config
-#define BASE_SPEED 150
-#define DANGER_SPEED 78 // Danger means an obstacle is detected ahead
-#define BACKOFF_SPEED 90 // Speed while reversing
+#define BASE_SPEED 220
+#define DANGER_SPEED 120 // Danger means an obstacle is detected ahead
+#define BACKOFF_SPEED 120 // Speed while reversing
 #define MIN_FRONT_DIST 7
 #define MAX_FRONT_DIST 15
-#define LATERAL_CORRECTION_SPEED 60
-#define ROTATIONAL_CORRECTION_SPEED 70
+#define LATERAL_CORRECTION_SPEED 120
+#define ROTATIONAL_CORRECTION_SPEED 140
 
 typedef struct {
   uint8_t dir;
@@ -85,8 +85,8 @@ void movement_tick(long delta_time, int gpioVal) {
   uint8_t rightDist = READ_SIDE_DIST(RIGHT);
   int current_dist_sum = rightDist + leftDist;
   int rightShift = (leftDist - target_left_dist) + (target_right_dist - rightDist);
-  bool rightVoid = abs(target_right_dist - rightDist) >= 10;
-  bool leftVoid = abs(leftDist - target_left_dist) >= 10;
+  bool rightVoid = abs(target_right_dist - rightDist) >= 20;
+  bool leftVoid = abs(leftDist - target_left_dist) >= 20;
   bool anyVoid = leftVoid || rightVoid;
   bool allVoid = rightVoid && leftVoid && frontDist > 250 && backDist > 250;
 
@@ -153,10 +153,8 @@ void movement_tick(long delta_time, int gpioVal) {
   long now = millis();
   int dist_sum_error = abs(current_dist_sum - target_dist_sum);
 
-  // Serial.println(dist_sum_error);
-
-  if (frontSpeed > 0 && !rightVoid && !leftVoid) {
-    if (dist_sum_error > 5) {
+  if (frontSpeed >= 0 && !rightVoid && !leftVoid) {
+    if (dist_sum_error > 8) {
       // Rotational alignment
       frontSpeed = 0;
       if (now > rot_end_time) {
@@ -178,14 +176,32 @@ void movement_tick(long delta_time, int gpioVal) {
     }
   }
   
-  // Serial.println(frontSpeed);
   m_compound(bot_state.dir, frontSpeed, lateralSpeed, rotation);
 }
 
 void recovery(long delta_time) {
   recovery_counter += delta_time;
-  if (recovery_counter > 3000) {
-    TURN_RIGHT();
-    recovery_counter = 0;
-  }
+  int recoveryMode = recovery_counter / 500;
+
+  // if (recoveryMode <= 1) {
+  //   m_east(230, 0);
+  //   return;
+  // }
+
+  // if (recoveryMode == 0) {
+  //   m_north(120, 0);
+  // } else if (recoveryMode == 1) {
+  //   m_south(120, 0);
+  // } else if (recoveryMode == 2) {
+  //   m_east(120, 0);
+  // } else if (recoveryMode == 3) {
+  //   m_west(120, 0);
+  // } else {
+  //   recovery_counter = 0;
+  // }
+  randomSeed(recoveryMode);
+  if (recoveryMode <= 4 || recoveryMode % 2 == 0)
+    m_compound(random(0,4), 200, 0, 0);
+  else
+    m_compound(0, 0, 0, random(0,100)  < 50 ? 120 : -120);
 }
