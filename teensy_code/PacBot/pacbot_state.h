@@ -1,15 +1,3 @@
-// Directions (relative to the maze)
-#define NORTH 0
-#define EAST  1
-#define SOUTH 2
-#define WEST  3
-
-// Sides (relative to the robot)
-#define FRONT 0
-#define RIGHT 1
-#define BACK  2
-#define LEFT  3
-
 // Config
 #define BASE_SPEED 220
 #define DANGER_SPEED 120 // Danger means an obstacle is detected ahead
@@ -38,7 +26,6 @@ int target_right_dist;
 int target_left_dist;
 long recovery_counter;
 
-#define READ_DIR_DIST(dir) (sensors[(dir)].readRangeContinuous())
 #define READ_SIDE_DIST(side) (sensors[(bot_state.dir + (side)) % 4].readRangeContinuous())
 #define MOVE_DIR(dir, speed, rightBias) m_funcs[(dir)]((speed), (rightBias));
 #define MOVE_SIDE(side, speed, rightBias) MOVE_DIR((bot_state.dir + (side)) % 4, speed, rightBias)
@@ -76,6 +63,8 @@ void calibrate() {
   target_dist_sum = current_dist_sum;
   target_right_dist = rightDist;
   target_left_dist = leftDist;
+
+  calibrate_imu();
 }
 
 void movement_tick(long delta_time, int gpioVal) {

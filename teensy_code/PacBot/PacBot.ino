@@ -1,3 +1,4 @@
+#include "references.h"
 #include "sensors.h"
 #include "motors.h"
 #include "pacbot_state.h"
@@ -28,13 +29,14 @@ void setup()
   // SYNC_BEEP(100);
   // delay(100);
   // SYNC_BEEP(100);
-  
+
   randomSeed(515613);
 }
 
 long last_tick_time = 0;
 void loop() {
-  long now = millis();
+  unsigned long now = millis();
+  imu_tick(now);
 
   int gpioVal = digitalRead(gpio_pin_1);
   gpioVal |= digitalRead(gpio_pin_2) << 1;
@@ -79,7 +81,6 @@ void loop() {
   } else if (gpioVal == 5) {
     init_state();
     calibrate();
-    STOP();
     SYNC_BEEP(80);
     delay(80);
   } else if (gpioVal == 6) {
