@@ -1,5 +1,5 @@
-const uint8_t MOTORCW_PINS[4]  = {15, 6, 23, 8};
-const uint8_t MOTORCCW_PINS[4] = {14, 5, 22, 7};
+const uint8_t MOTORCW_PINS[4]  = {15, 23, 5, 8};
+const uint8_t MOTORCCW_PINS[4] = {14, 22, 6, 7};
 
 #define CW(n, speed) analogWrite(MOTORCW_PINS[n], speed)
 #define CCW(n, speed) analogWrite(MOTORCCW_PINS[n], speed)
