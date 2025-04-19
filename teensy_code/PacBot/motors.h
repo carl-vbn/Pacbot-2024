@@ -1,5 +1,7 @@
-const uint8_t MOTORCW_PINS[4]  = {15, 23, 5, 8};
-const uint8_t MOTORCCW_PINS[4] = {14, 22, 6, 7};
+// const uint8_t MOTORCW_PINS[4]  = {15, 23, 5, 8};
+// const uint8_t MOTORCCW_PINS[4] = {14, 22, 6, 7};
+const uint8_t MOTORCW_PINS[4]  = {7, 14, 5, 23};
+const uint8_t MOTORCCW_PINS[4] = {8, 15, 6, 22};
 
 #define CW(n, speed) analogWrite(MOTORCW_PINS[n], speed)
 #define CCW(n, speed) analogWrite(MOTORCCW_PINS[n], speed)
@@ -76,10 +78,22 @@ void m_compound(uint8_t dir, int frontSpeed, int lateralSpeed, int rotation) {
   int speeds[4];
 
   // Calculate mixed speed for each motor
-  speeds[0] =  0          - lateralSpeed + rotation;
-  speeds[1] =  frontSpeed + 0            + rotation;
-  speeds[2] =  0          + lateralSpeed + rotation;
-  speeds[3] = -frontSpeed - 0            + rotation;
+  // speeds[0] =  0          - lateralSpeed + rotation;
+  // speeds[1] =  frontSpeed + 0            + rotation;
+  // speeds[2] =  0          + lateralSpeed + rotation;
+  // speeds[3] = -frontSpeed - 0            + rotation;
+
+  speeds[0] =  frontSpeed - lateralSpeed + rotation;
+  speeds[1] =  frontSpeed + lateralSpeed + rotation;
+  speeds[2] = -frontSpeed + lateralSpeed + rotation;
+  speeds[3] = -frontSpeed - lateralSpeed + rotation;
+
+  // Serial.print("r ");
+  // for (int i = 0; i<4; i++) {
+  //   Serial.print(speeds[i]);
+  //   Serial.print(" ");
+  // }
+  // Serial.println();
 
   // Apply speeds to motors
   for (int i = 0; i < 4; i++) {

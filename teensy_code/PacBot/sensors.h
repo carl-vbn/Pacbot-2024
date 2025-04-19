@@ -17,10 +17,10 @@ TwoWire &MPUWire = Wire1;  // MPU6050 on secondary I2C (e.g., pins 16/17)
 float imu_yaw = 0.0;
 float imu_bias_z = 0.0;
 float imu_filtered_rate_z = 0.0;
-const float imu_alpha = 0.95;
+const float imu_alpha = 0.98; // used to be 0.95
 
 unsigned long imu_prevMillis = 0;
-const unsigned long imu_interval = 10;
+const unsigned long imu_interval = 5; // used to be 10
 
 int16_t _readGyroZRaw() {
   MPUWire.beginTransmission(MPU_ADDR);
@@ -44,6 +44,7 @@ void calibrate_imu() {
   imu_bias_z = sum / 100.0;
 
   imu_yaw = 0.0;
+  Serial.println("Calibrated IMU");
 }
 
 void init_sensors() {

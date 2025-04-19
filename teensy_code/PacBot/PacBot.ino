@@ -11,7 +11,7 @@ int handshake_progress;
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(gpio_pin_1, INPUT);
   pinMode(gpio_pin_2, INPUT);
@@ -20,7 +20,7 @@ void setup()
   init_motors();
 
   init_state();
-  handshake_progress = 0;
+  handshake_progress = 3;
 
   digitalWrite(LED_BUILTIN, HIGH);
 
@@ -36,7 +36,7 @@ void setup()
 long last_tick_time = 0;
 void loop() {
   unsigned long now = millis();
-  imu_tick(now);
+  // imu_tick(now);
 
   int gpioVal = digitalRead(gpio_pin_1);
   gpioVal |= digitalRead(gpio_pin_2) << 1;
