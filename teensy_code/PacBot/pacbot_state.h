@@ -13,6 +13,8 @@ typedef struct {
   long pause_time;
   long backoff_time;
   bool wall_detected;
+  unsigned long playStartTime;
+  int startDir;
 } pb_state_t;
 
 pb_state_t bot_state;
@@ -50,6 +52,9 @@ void calibrate() {
   target_right_dist = rightDist;
   target_left_dist = leftDist;
 
+  bot_state.playStartTime = 0;
+  bot_state.startDir = 0;
+
   calibrate_imu();
 }
 
@@ -65,6 +70,8 @@ void init_state() {
   recovery_counter = 0;
   rightVoid = false;
   leftVoid = false;
+
+  bot_state.playStartTime = millis();
 
   calibrate();
 }
@@ -110,10 +117,10 @@ void movement_tick(long delta_time, int gpioVal) {
   bool anyVoid = leftVoid || rightVoid;
   bool allVoid = rightVoid && leftVoid && frontDist > 250 && backDist > 250;
 
-  if (frontDist < 255 && !bot_state.wall_detected) {
-    PAUSE(1000);
-    bot_state.wall_detected = true;
-  }
+  // if (frontDist < 255 && !bot_state.wall_detected) {
+  //   PAUSE(200);
+  //   bot_state.wall_detected = true;
+  // }
 
   if (frontDist >= 255 && bot_state.wall_detected) {
     bot_state.wall_detected = false;
@@ -161,12 +168,13 @@ void movement_tick(long delta_time, int gpioVal) {
 
   // Alignment corrections
   long now = millis();
+
   int dist_sum_error = abs(current_dist_sum - target_dist_sum);
   // Serial.print("dse ");
   // Serial.println(dist_sum_error);
   int yaw = READ_YAW();
   if (frontSpeed >= 0 && !rightVoid && !leftVoid) {
-    if (dist_sum_error > 16) {
+    if (dist_sum_error > 12) {
       // Rotational alignment
       frontSpeed = 0;
       if (now > rot_end_time) {
@@ -198,6 +206,7 @@ void movement_tick(long delta_time, int gpioVal) {
   // Serial.print(lateralSpeed);
   // Serial.print(" ");
   // Serial.println(rotation);
+
   m_compound(bot_state.dir, frontSpeed, lateralSpeed, rotation);
 }
 
@@ -223,7 +232,7 @@ void recovery(long delta_time) {
   // }
   randomSeed(recoveryMode);
   if (recoveryMode <= 4 || recoveryMode % 2 == 0)
-    m_compound(random(0,4), 200, 0, 0);
+    m_compound(random(0,4), 180, 0, 0);
   else
-    m_compound(0, 0, 0, random(0,100)  < 50 ? 120 : -120);
+    m_compound(0, 0, 0, random(0,100) < 50 ? 120 : -120);
 }

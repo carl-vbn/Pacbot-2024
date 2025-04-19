@@ -73,8 +73,15 @@ void loop() {
   if (gpioVal == 0) {
     STOP();
   } else if (gpioVal <= 4) {
+    if (bot_state.stopped) {
+      bot_state.playStartTime = millis();
+      bot_state.startDir = !bot_state.startDir;
+    }
+
+    unsigned long playTime = now - bot_state.playStartTime;
+
     START();
-    SET_DIR(gpioVal - 1);
+    SET_DIR(playTime < 2000 ? (bot_state.startDir ? 3 : 1) : (gpioVal - 1));
     recovery_counter = 0;
     // START();
     // recovery(now - last_tick_time);
