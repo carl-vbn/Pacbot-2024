@@ -55,7 +55,7 @@ void calibrate() {
   bot_state.playStartTime = 0;
   bot_state.startDir = 0;
 
-  calibrate_imu();
+  //calibrate_imu();
 }
 
 void init_state() {
@@ -172,7 +172,7 @@ void movement_tick(long delta_time, int gpioVal) {
   int dist_sum_error = abs(current_dist_sum - target_dist_sum);
   // Serial.print("dse ");
   // Serial.println(dist_sum_error);
-  int yaw = READ_YAW();
+  //int yaw = READ_YAW();
   if (frontSpeed >= 0 && !rightVoid && !leftVoid) {
     if (dist_sum_error > 12) {
       // Rotational alignment
