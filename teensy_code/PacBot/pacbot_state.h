@@ -1,11 +1,27 @@
 // Config
-#define BASE_SPEED 120
-#define DANGER_SPEED 80 // Danger means an obstacle is detected ahead
+#define BASE_SPEED 100
+#define DANGER_SPEED 60 // Danger means an obstacle is detected ahead
 #define BACKOFF_SPEED 80 // Speed while reversing
 #define MIN_FRONT_DIST 7
 #define MAX_FRONT_DIST 15
 #define LATERAL_CORRECTION_SPEED 70
 #define ROTATIONAL_CORRECTION_SPEED 80
+
+// PID Tuning
+#define Kp 3.0      // start here; tune on your robot
+#define Ki 0.1     // small integral to remove steady-state bias
+#define Kd 0.2      // derivative to dampen oscillation
+
+// PID Loop
+int basePWM = 140; // forward speed (0-255). Increase once heading is stable.
+int maxPWM = 255; // safety clamp for motor commands
+float maxI = 50;  // integral windup clamp (in "error*sec" units)
+float maxTurn = 120; // clamp PID output used for turning correction (PWM units)
+
+float targetYawDeg = 0.0;
+float integ = 0.0;
+float prevErr = 0.0;
+unsigned long prevMs = 0;
 
 typedef struct {
   uint8_t dir;
@@ -14,19 +30,11 @@ typedef struct {
   long backoff_time;
   bool wall_detected;
   unsigned long playStartTime;
-  int startDir;
 } pb_state_t;
+
 
 pb_state_t bot_state;
 
-// Rotational alignment sequence
-int target_dist_sum; // Sum of left and right sensor values when aligned with walls
-bool rot_dir;
-long rot_end_time;
-int dist_err_prerot;
-int target_right_dist;
-int target_left_dist;
-long recovery_counter;
 uint8_t lastRightDist;
 uint8_t lastLeftDist;
 bool leftVoid;
@@ -46,32 +54,30 @@ void calibrate() {
   uint8_t rightDist = READ_SIDE_DIST(RIGHT);
   lastRightDist = rightDist;
   lastLeftDist = leftDist;
-  int current_dist_sum = rightDist + leftDist;
 
-  target_dist_sum = current_dist_sum;
-  target_right_dist = rightDist;
-  target_left_dist = leftDist;
+  // target_right_dist = rightDist;
+  // target_left_dist = leftDist;
 
   bot_state.playStartTime = 0;
-  bot_state.startDir = 0;
 
-  //calibrate_imu();
+  calibrate_imu();
+
+  targetYawDeg = READ_YAW();
 }
 
 void init_state() {
+  Serial.println("init_state");
   bot_state.dir = NORTH;
   bot_state.stopped = true;
   bot_state.pause_time = 0;
   bot_state.backoff_time = 0;
   bot_state.wall_detected = false;
 
-  rot_dir = false;
-  rot_end_time = 0;
-  recovery_counter = 0;
   rightVoid = false;
   leftVoid = false;
 
   bot_state.playStartTime = millis();
+  prevMs = millis();
 
   calibrate();
 }
@@ -84,155 +90,89 @@ void init_state() {
 #define TURN_RIGHT() bot_state.dir = (bot_state.dir + 1) % 4
 #define TURN_LEFT() bot_state.dir = (bot_state.dir + 3) % 4
 
+float angleDiffDeg(float d) {
+  while (d > 180.0f) d -= 360.0f;
+  while (d < -180.0f) d += 360.0f;
+  return d;
+}
+
+int map_rotation_speed(float speed) {
+  // Returns 0-1023
+
+  float absSpeed = abs(speed);
+
+  if (absSpeed < 50) {
+    return 0;
+  } else if (absSpeed > 200) {
+    return 200;
+  } else {
+    return speed;
+  }
+}
+
 void movement_tick(long delta_time, int gpioVal) {
   uint8_t backDist = READ_SIDE_DIST(BACK);
   uint8_t frontDist = READ_SIDE_DIST(FRONT);
   uint8_t leftDist = READ_SIDE_DIST(LEFT);
   uint8_t rightDist = READ_SIDE_DIST(RIGHT);
-  int current_dist_sum = rightDist + leftDist;
-  int rightShift = (leftDist - target_left_dist) + (target_right_dist - rightDist);
-  // bool rightVoid = abs(target_right_dist - rightDist) >= 255;
-  // bool leftVoid = abs(leftDist - target_left_dist) >= 255;
 
-  int16_t dRightDist = rightDist - lastRightDist;
-  int16_t dLeftDist = leftDist - lastLeftDist;
-  lastRightDist = rightDist;
-  lastLeftDist = leftDist;
+  int distanceDelta = rightDist - leftDist;
 
-  if (dRightDist > 40) {
-    rightVoid = true;
-  } else if (dRightDist < -40) {
-    rightVoid = false;
-  }
+  bool lateralVoid = leftDist > 200 || rightDist > 200;
 
-  if (dLeftDist > 40) {
-    leftVoid = true;
-  } else if (dLeftDist < -40) {
-    leftVoid = false;
-  }
-
-  // Serial.print(rightVoid);
-  // Serial.println(leftVoid);
-
-  bool anyVoid = leftVoid || rightVoid;
-  bool allVoid = rightVoid && leftVoid && frontDist > 250 && backDist > 250;
-
-  // if (frontDist < 255 && !bot_state.wall_detected) {
-  //   PAUSE(200);
-  //   bot_state.wall_detected = true;
-  // }
-
-  if (frontDist >= 255 && bot_state.wall_detected) {
-    bot_state.wall_detected = false;
-  }
+  imu_tick();
 
   if (bot_state.stopped) {
     m_stop();
     return;
   }
 
-  if (bot_state.pause_time > 0) {
-    m_stop();
-    bot_state.pause_time -= delta_time;
-
-    if (bot_state.pause_time < 0) {
-      bot_state.pause_time = 0;
-    }
-
-    return;
-  }
-
-  if (bot_state.backoff_time > 0) {
-    // MOVE_SIDE(BACK, BACKOFF_SPEED, 0);
-    m_compound(bot_state.dir, -BACKOFF_SPEED, 0, 0);
-    bot_state.backoff_time -= delta_time;
-
-    if (bot_state.backoff_time < 0) {
-      bot_state.backoff_time = 0;
-      PAUSE(300);
-    }
-
-    return;
-  }
-
-  int frontSpeed = 0;
+  int frontSpeed = BASE_SPEED;
   int lateralSpeed = 0;
   int rotation = 0;
 
-  if (frontDist < MIN_FRONT_DIST) {
-    // frontSpeed = -BACKOFF_SPEED; 
-    bot_state.backoff_time += 70;
-  } else if (frontDist > MAX_FRONT_DIST) {
-    frontSpeed = frontDist < 255 ? DANGER_SPEED : BASE_SPEED;
-  }
-
-  // Alignment corrections
-  long now = millis();
-
-  int dist_sum_error = abs(current_dist_sum - target_dist_sum);
-  // Serial.print("dse ");
-  // Serial.println(dist_sum_error);
-  //int yaw = READ_YAW();
-  if (frontSpeed >= 0 && !rightVoid && !leftVoid) {
-    if (dist_sum_error > 12) {
-      // Rotational alignment
+  // Obstacle detection
+  if (frontDist < 255) {
+    if (frontDist > 120) {
+      frontSpeed = DANGER_SPEED;
+    } else {
       frontSpeed = 0;
-      if (now > rot_end_time) {
-        if (dist_err_prerot < dist_sum_error)
-          rot_dir = !rot_dir;
-        
-        dist_err_prerot = dist_sum_error;
-        rot_end_time = now + 15;
-      }
-      if (rot_dir) rotation = ROTATIONAL_CORRECTION_SPEED;
-      else rotation = -ROTATIONAL_CORRECTION_SPEED;
-      // if (yaw > 0) {
-      //   rotation = -ROTATIONAL_CORRECTION_SPEED;
-      // } else {
-      //   rotation = ROTATIONAL_CORRECTION_SPEED;
-      // }
-    } else if (abs(rightShift) > 10) {
-      // Lateral alignment
-      if (rightShift > 0) {
-        lateralSpeed = -LATERAL_CORRECTION_SPEED;
-      } else {
-        lateralSpeed = LATERAL_CORRECTION_SPEED;
-      }
     }
   }
-  
-  // Serial.print(frontSpeed);
-  // Serial.print(" ");
-  // Serial.print(lateralSpeed);
-  // Serial.print(" ");
-  // Serial.println(rotation);
 
-  m_compound(bot_state.dir, frontSpeed, lateralSpeed, rotation);
-}
+  // Lateral correction
+  if (!lateralVoid) {
+    int correctionSpeed = abs(distanceDelta) * 1.5;
 
-void recovery(long delta_time) {
-  recovery_counter += delta_time;
-  int recoveryMode = recovery_counter / 500;
+    if (correctionSpeed > 70) {
+      correctionSpeed = 70;
+    }
 
-  // if (recoveryMode <= 1) {
-  //   m_east(230, 0);
-  //   return;
-  // }
+    lateralSpeed = distanceDelta > 0 ? correctionSpeed : -correctionSpeed;
+  }
 
-  // if (recoveryMode == 0) {
-  //   m_north(120, 0);
-  // } else if (recoveryMode == 1) {
-  //   m_south(120, 0);
-  // } else if (recoveryMode == 2) {
-  //   m_east(120, 0);
-  // } else if (recoveryMode == 3) {
-  //   m_west(120, 0);
-  // } else {
-  //   recovery_counter = 0;
-  // }
-  randomSeed(recoveryMode);
-  if (recoveryMode <= 4 || recoveryMode % 2 == 0)
-    m_compound(random(0,4), 180, 0, 0);
-  else
-    m_compound(0, 0, 0, random(0,100) < 50 ? 120 : -120);
+  // PID Calculation (thanks gpt)
+
+  unsigned long now = millis();
+  float dt = (now - prevMs) / 1000.0f;
+  if (dt <= 0) dt = 0.001f; // guard
+  prevMs = now;
+
+  // --- measure yaw and compute shortest signed error (-180..+180) ---
+  float yaw = READ_YAW();
+  float err = angleDiffDeg(targetYawDeg - yaw);
+
+  // --- PID ---
+  // Integral with simple anti-windup
+  integ += err * dt;
+  integ = constrain(integ, -maxI, maxI);
+
+  float deriv = (err - prevErr) / dt;
+  prevErr = err;
+
+  float turn = Kp*err + Ki*integ + Kd*deriv; // positive => turn left
+  // Map PID output to PWM correction; clamp
+  turn = -constrain(turn, -maxTurn, +maxTurn);
+
+  m_compound(bot_state.dir, frontSpeed, lateralSpeed, map_rotation_speed(turn));
 }

@@ -11,6 +11,8 @@ int handshake_progress;
 
 void setup()
 {
+  delay(5000);
+
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(gpio_pin_1, INPUT);
@@ -20,7 +22,7 @@ void setup()
   init_motors();
 
   init_state();
-  handshake_progress = 3;
+  handshake_progress = 0;
 
   digitalWrite(LED_BUILTIN, HIGH);
 
@@ -41,6 +43,8 @@ void loop() {
   int gpioVal = digitalRead(gpio_pin_1);
   gpioVal |= digitalRead(gpio_pin_2) << 1;
   gpioVal |= digitalRead(gpio_pin_3) << 2;
+
+  Serial.println(gpioVal);
 
   // Handshake routine (to avoid spinning motors before raspberry pi has made contact)
   if (handshake_progress < 3) {
@@ -75,16 +79,12 @@ void loop() {
   } else if (gpioVal <= 4) {
     if (bot_state.stopped) {
       bot_state.playStartTime = millis();
-      bot_state.startDir = !bot_state.startDir;
     }
 
     unsigned long playTime = now - bot_state.playStartTime;
 
     START();
-    SET_DIR(playTime < 2000 ? (bot_state.startDir ? 3 : 1) : (gpioVal - 1));
-    recovery_counter = 0;
-    // START();
-    // recovery(now - last_tick_time);
+    SET_DIR(gpioVal - 1);
   } else if (gpioVal == 5) {
     init_state();
     calibrate();
@@ -92,8 +92,7 @@ void loop() {
     delay(80);
   } else if (gpioVal == 6) {
     START();
-    // m_clockwise(ROTATIONAL_CORRECTION_SPEED);
-    recovery(now - last_tick_time);
+    // TODO Recovery mode
   } 
 
   movement_tick(now - last_tick_time, gpioVal);
