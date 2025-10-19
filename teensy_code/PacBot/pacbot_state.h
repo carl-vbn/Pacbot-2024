@@ -141,8 +141,14 @@ void movement_tick(long delta_time, int gpioVal) {
   }
 
   // Lateral correction
-  if (!lateralVoid && abs(distanceDelta) > 30) {
-    lateralSpeed = distanceDelta > 0 ? 80 : -80;
+  if (!lateralVoid) {
+    int correctionSpeed = abs(distanceDelta) * 1.5;
+
+    if (correctionSpeed > 70) {
+      correctionSpeed = 70;
+    }
+
+    lateralSpeed = distanceDelta > 0 ? correctionSpeed : -correctionSpeed;
   }
 
   // PID Calculation (thanks gpt)
