@@ -1,49 +1,55 @@
 #include <Wire.h>
 #include <VL6180X.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <utility/imumaths.h>
 
 VL6180X sensors[4];
 const int sensor_pins[4] = {11, 12, 9, 10};
-
-// MPU6050 Config
-#define MPU_ADDR       0x68
-#define GYRO_ZOUT_H    0x47
-#define PWR_MGMT_1     0x6B
+int imu_yaw;
 
 // User macros
 #define READ_DIR_DIST(dir) (sensors[(dir)].readRangeContinuous())
 #define READ_YAW() (imu_yaw)
 
-TwoWire &MPUWire = Wire1;  // MPU6050 on secondary I2C (e.g., pins 16/17)
-float imu_yaw = 0.0;
-float imu_bias_z = 0.0;
-float imu_filtered_rate_z = 0.0;
-const float imu_alpha = 0.95;
+// If ADR is LOW (default) -> 0x28 ; if ADR is HIGH -> 0x29
+constexpr uint8_t BNO_ADDR = 0x28;
 
-unsigned long imu_prevMillis = 0;
-const unsigned long imu_interval = 10;
+// Use the primary I2C bus (&Wire on pins 18/19 for Teensy 4.0)
+Adafruit_BNO055 bno(55, BNO_ADDR, &Wire1);
 
-int16_t _readGyroZRaw() {
-  MPUWire.beginTransmission(MPU_ADDR);
-  MPUWire.write(GYRO_ZOUT_H);
-  MPUWire.endTransmission(false);
-  MPUWire.requestFrom(MPU_ADDR, 2);
-
-  if (MPUWire.available() < 2) return 0;
-  uint8_t high = MPUWire.read();
-  uint8_t low  = MPUWire.read();
-  return (int16_t)((high << 8) | low);
+void printCalStatus() {
+  uint8_t sys, gyro, accel, mag;
+  bno.getCalibration(&sys, &gyro, &accel, &mag);
+  Serial.print(" Calib(SYS,G,A,M)=");
+  Serial.print(sys); Serial.print(",");
+  Serial.print(gyro); Serial.print(",");
+  Serial.print(accel); Serial.print(",");
+  Serial.print(mag);
 }
 
-void calibrate_imu() {
-  // Calibrate MPU6050 Z gyro bias
-  long sum = 0;
-  for (int i = 0; i < 100; i++) {
-    sum += _readGyroZRaw();
-    delay(10);
+void init_bno() {
+  if (!bno.begin()) {
+    Serial.println("ERROR: No BNO055 detected. Check wiring & I2C address (ADR pin).");
+    // Don't hard hang: keep printing a heartbeat so you can see it's alive
+    for (;;) {
+      Serial.println(" Waiting for BNO055...");
+      delay(1000);
+    }
   }
-  imu_bias_z = sum / 100.0;
 
-  imu_yaw = 0.0;
+  // Give the sensor time to boot fully
+  delay(1000);
+
+  // Use external crystal for better accuracy if your breakout has one (Adafruit board does)
+  bno.setExtCrystalUse(true);
+
+  // Optional: set to NDOF fusion mode explicitly (default is NDOF after begin)
+  // bno.setMode(Adafruit_BNO055::OPERATION_MODE_NDOF);
+
+  Serial.println("BNO055 initialized.\n");
+
+  imu_yaw = 0;
 }
 
 void init_sensors() {
@@ -52,30 +58,10 @@ void init_sensors() {
     digitalWrite(sensor_pins[i], LOW);
   }
 
-  Wire.begin();
-  MPUWire.begin();   // MPU6050 on secondary I2C
-
-  // Wake up MPU6050
-  Serial.println("Initializing IMU...");
-  MPUWire.beginTransmission(MPU_ADDR);
-  MPUWire.write(PWR_MGMT_1);
-  MPUWire.write(0);
-  MPUWire.endTransmission();
-
-  calibrate_imu();
-
   delay(100);
 
-  // byte status = mpu.begin();
-  // Serial.print(F("MPU6050 status: "));
-  // Serial.println(status);
-  // while (status != 0) {
-  //   Serial.print("MPU ERROR ");
-  //   Serial.println(status);
-  //   delay(200);
-  // }
-
   Serial.println("Initializing IR sensors...");
+  Wire.begin();
   for (int i = 0; i<4; i++) {
     digitalWrite(sensor_pins[i], HIGH);
     delay(50);
@@ -89,21 +75,40 @@ void init_sensors() {
 
   for (int i = 0; i<4; i++) {
     sensors[i].startRangeContinuous();
+    Serial.println(sensors[i].readRangeContinuous());
   }
 
-  imu_prevMillis = millis();
+  // BNO055 Initialization
+
+  // Speed up I2C a bit (Teensy 4.0 easily handles 400kHz)
+  Wire.setClock(400000);
+
+  // Try to init the BNO055
+  init_bno();
 }
 
-void imu_tick(unsigned long now) {
-  if (now - imu_prevMillis >= imu_interval) {
-    float dt = (now - imu_prevMillis) / 1000.0;
-    imu_prevMillis = now;
+void calibrate_imu() {
+  // TODO Maybe there is something we can calibrate here?
+}
 
-    // MPU6050 Yaw
-    float z_raw = _readGyroZRaw();
-    float z_rate = (z_raw - imu_bias_z) / 131.0;
-    imu_filtered_rate_z = imu_alpha * imu_filtered_rate_z + (1 - imu_alpha) * z_rate;
-    imu_yaw += imu_filtered_rate_z * dt;
-    imu_yaw *= 0.999;
-  }
+void imu_tick() {
+    sensors_event_t event;
+    bno.getEvent(&event, Adafruit_BNO055::VECTOR_EULER);
+
+    // Euler angles are in degrees: x=heading (yaw), y=roll, z=pitch
+    imu_yaw = event.orientation.x;
+
+    // Print calibration + self test / system status
+    // printCalStatus();
+
+    // You can also check overall system status & self test:
+    // uint8_t system_status, self_test, system_error;
+    // bno.getSystemStatus(&system_status, &self_test, &system_error);
+    // Serial.print("  Sys=");
+    // Serial.print(system_status);
+    // Serial.print("  Err=");
+    // Serial.print(system_error);
+
+    // Serial.println();
+
 }
