@@ -1,6 +1,6 @@
 // Config
-#define BASE_SPEED 120
-#define DANGER_SPEED 80 // Danger means an obstacle is detected ahead
+#define BASE_SPEED 100
+#define DANGER_SPEED 60 // Danger means an obstacle is detected ahead
 #define BACKOFF_SPEED 80 // Speed while reversing
 #define MIN_FRONT_DIST 7
 #define MAX_FRONT_DIST 15
@@ -127,9 +127,18 @@ void movement_tick(long delta_time, int gpioVal) {
     return;
   }
 
-  int frontSpeed = 100;
+  int frontSpeed = BASE_SPEED;
   int lateralSpeed = 0;
   int rotation = 0;
+
+  // Obstacle detection
+  if (frontDist < 255) {
+    if (frontDist > 120) {
+      frontSpeed = DANGER_SPEED;
+    } else {
+      frontSpeed = 0;
+    }
+  }
 
   // Lateral correction
   if (!lateralVoid && abs(distanceDelta) > 30) {
@@ -158,12 +167,6 @@ void movement_tick(long delta_time, int gpioVal) {
   float turn = Kp*err + Ki*integ + Kd*deriv; // positive => turn left
   // Map PID output to PWM correction; clamp
   turn = -constrain(turn, -maxTurn, +maxTurn);
-
-  Serial.print(turn);
-  Serial.print(" ");
-  Serial.print(distanceDelta);
-  Serial.print(" ");
-  Serial.println(bot_state.dir);
 
   m_compound(bot_state.dir, frontSpeed, lateralSpeed, map_rotation_speed(turn));
 }
