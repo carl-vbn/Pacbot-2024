@@ -240,11 +240,4 @@ parser.add_argument('--output', type=str, default='', help='Output file for scor
 args = parser.parse_args()
 
 if __name__ == '__main__':
-
-	# Run the event loop forever
-	loop = asyncio.get_event_loop()
-	loop.create_task(main())
-	loop.run_forever()
-	
-	print("Cleaning up GPIO")
-	#GPIO.cleanup()
+	asyncio.run(main())
