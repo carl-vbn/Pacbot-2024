@@ -1,8 +1,8 @@
 #include "sensors.h"
 
 // -- State -------------------------------------------------------------
-static VL6180X         tofSensors[MAX_SENSORS];
-static Adafruit_BNO055 bno(55, BNO055_ADDRESS, &Wire);
+static VL6180X          tofSensors[MAX_SENSORS];
+static Adafruit_BNO055 *bno = nullptr;
 
 bool    sensorPresent[MAX_SENSORS];
 uint8_t numSensorsPresent = 0;
@@ -19,7 +19,7 @@ static bool initialiseSensor(uint8_t index) {
     const uint8_t DEFAULT_ADDR = 0x29;
 
     digitalWrite(CE_PINS[index], HIGH);
-    delay(15);
+    delay(100);
 
     if (!i2cProbe(Wire1, DEFAULT_ADDR)) {
         digitalWrite(CE_PINS[index], LOW);
@@ -50,15 +50,30 @@ static bool initialiseSensor(uint8_t index) {
 static bool initialiseIMU() {
     if (!i2cProbe(Wire, BNO055_ADDRESS)) return false;
 
-    bno = Adafruit_BNO055(55, BNO055_ADDRESS, &Wire);
+    bno = new Adafruit_BNO055(55, BNO055_ADDRESS, &Wire);
 
-    if (!bno.begin()) return false;
+    if (!bno->begin()) return false;
 
-    bno.setExtCrystalUse(true);
+    bno->setExtCrystalUse(true);
     return true;
 }
 
 // -- Public API --------------------------------------------------------
+
+// Bit-bang up to 9 SCL clocks to free a stuck SDA line.
+// Must be called BEFORE Wire.begin() while the pins are still GPIO.
+static void i2cBusRecover(uint8_t sdaPin, uint8_t sclPin) {
+    pinMode(sdaPin, INPUT_PULLUP);
+    pinMode(sclPin, OUTPUT);
+
+    for (uint8_t i = 0; i < 9; i++) {
+        if (digitalRead(sdaPin) == HIGH) break;   // bus is free
+        digitalWrite(sclPin, LOW);
+        delayMicroseconds(5);
+        digitalWrite(sclPin, HIGH);
+        delayMicroseconds(5);
+    }
+}
 
 void sensorsHardwareInit() {
     for (uint8_t i = 0; i < MAX_SENSORS; i++) {
@@ -67,9 +82,16 @@ void sensorsHardwareInit() {
         sensorPresent[i] = false;
     }
 
+    // If a previous upload interrupted mid-I2C-transaction, SDA may be
+    // stuck LOW.  Clock-cycle recovery frees it before the Wire library
+    // takes ownership of the pins.
+    i2cBusRecover(TOF_SDA_PIN, TOF_SCL_PIN);
+
     Wire1.setSDA(TOF_SDA_PIN);
     Wire1.setSCL(TOF_SCL_PIN);
     Wire1.begin();
+
+    i2cBusRecover(IMU_SDA_PIN, IMU_SCL_PIN);
 
     Wire.setSDA(IMU_SDA_PIN);
     Wire.setSCL(IMU_SCL_PIN);
@@ -82,9 +104,11 @@ uint8_t sensorsInit() {
     for (uint8_t i = 0; i < MAX_SENSORS; i++) {
         sensorPresent[i] = initialiseSensor(i);
         if (sensorPresent[i]) numSensorsPresent++;
+        delay(100);
     }
 
     imuPresent = initialiseIMU();
+    // imuPresent = false;
 
     return numSensorsPresent;
 }
@@ -101,7 +125,7 @@ int16_t sensorReadMM(uint8_t index) {
 bool imuReadEuler(float &yaw, float &pitch, float &roll) {
     if (!imuPresent) return false;
 
-    imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+    imu::Vector<3> euler = bno->getVector(Adafruit_BNO055::VECTOR_EULER);
     yaw   = euler.x();
     pitch = euler.y();
     roll  = euler.z();

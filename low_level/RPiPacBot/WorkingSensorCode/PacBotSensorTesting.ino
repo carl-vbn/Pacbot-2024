@@ -1,45 +1,25 @@
 /*
     Raspberry Pi Pico 2 W + up to 8x Pololu VL6180X ToF sensors
-                         + 1x Adafruit BNO055 IMU
-    VL6180X sensors share I2C1 (GP18/GP19).
-    BNO055 sits on I2C0 (GP20/GP21).
-    CE pins are used at startup to bring each VL6180X up one at a time
-    and assign it a unique address. Sensors that fail to initialise are
-    marked absent and skipped.
+    All sensors share the same I2C bus. CE pins are used at startup
+    to bring each sensor up one at a time and assign it a unique address.
+    Sensors that fail to initialise are marked absent and skipped.
 
-    Wiring (VL6180X sensors):
+    Wiring (all sensors):
       VIN -> 3.3 V
       GND -> GND
       SDA -> GP18  (I2C1 SDA)
       SCL -> GP19  (I2C1 SCL)
       CE  -> see CE_PINS below
 
-    Wiring (BNO055):
-      VIN -> 3.3 V
-      GND -> GND
-      SDA -> GP20  (I2C0 SDA)
-      SCL -> GP21  (I2C0 SCL)
-
-    Libraries:
-      VL6180X by Pololu           (install via Library Manager)
-      Adafruit BNO055             (install via Library Manager)
-      Adafruit Unified Sensor     (dependency, install via Library Manager)
+    Library: VL6180X by Pololu (install via Library Manager)
 */
 
 #include <Wire.h>
 #include <VL6180X.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BNO055.h>
 
 // -- Configuration -----------------------------------------------------
-// VL6180X bus
-#define TOF_SDA_PIN      18
-#define TOF_SCL_PIN      19
-
-// BNO055 bus
-#define IMU_SDA_PIN      20
-#define IMU_SCL_PIN      21
-
+#define SDA_PIN          18
+#define SCL_PIN          19
 #define READ_INTERVAL_MS 100   // 10 Hz
 #define MAX_SENSORS      8
 
@@ -50,18 +30,10 @@
 const uint8_t CE_PINS[MAX_SENSORS]   = { 17,   2,    13,   0,    1,    3,    4,    5   };
 const uint8_t ADDRESSES[MAX_SENSORS] = { 0x28, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30 };
 
-// BNO055 can be at 0x28 (ADR=LOW) or 0x29 (ADR=HIGH).
-// Both are probed at boot; the first one found is used.
-const uint8_t BNO055_ADDRESSES[] = { 0x28, 0x29 };
-#define BNO055_NUM_ADDRESSES 2
-
 // -- State -------------------------------------------------------------
-VL6180X         sensors[MAX_SENSORS];
-bool            sensorPresent[MAX_SENSORS];   // true -> init succeeded
-uint8_t         numPresent = 0;
-
-Adafruit_BNO055 bno(55, 0x28, &Wire);        // bus and address updated at init
-bool            imuPresent = false;
+VL6180X sensors[MAX_SENSORS];
+bool    sensorPresent[MAX_SENSORS];   // true -> init succeeded
+uint8_t numPresent = 0;
 
 // -- Helpers -----------------------------------------------------------
 
@@ -79,16 +51,16 @@ void waitForChar(char target) {
 }
 
 /*
- * Probe whether anything ACKs on the given I2C bus at the given address.
+ * Probe whether anything ACKs on the I2C bus at the given address.
  * Returns true if an ACK is received (device present).
  */
-bool i2cProbe(TwoWire &bus, uint8_t address) {
-    bus.beginTransmission(address);
-    return (bus.endTransmission() == 0);
+bool i2cProbe(uint8_t address) {
+    Wire1.beginTransmission(address);
+    return (Wire1.endTransmission() == 0);
 }
 
 /*
- * Initialise one VL6180X sensor slot:
+ * Initialise one sensor slot:
  *   1. Assert CE HIGH  -> device boots at default address 0x29
  *   2. Probe 0x29      -> confirms device is alive on the bus
  *   3. init()          -> reads/writes the device register map
@@ -102,10 +74,10 @@ bool initialiseSensor(uint8_t index) {
 
     // Release from reset -- device will boot at 0x29
     digitalWrite(CE_PINS[index], HIGH);
-    delay(15);  // datasheet: >= 400 us after power-on; 15 ms is comfortable
+    delay(100);  // datasheet: >= 400 us after power-on; 15 ms is comfortable
 
     // Quick I2C probe before committing to a full init
-    if (!i2cProbe(Wire1, DEFAULT_ADDR)) {
+    if (!i2cProbe(DEFAULT_ADDR)) {
         digitalWrite(CE_PINS[index], LOW);  // put absent device back in reset
         return false;
     }
@@ -116,7 +88,7 @@ bool initialiseSensor(uint8_t index) {
 
     // Verify init succeeded by probing the *default* address one more time
     // (init() itself does not return a status code in this library)
-    if (!i2cProbe(Wire1, DEFAULT_ADDR)) {
+    if (!i2cProbe(DEFAULT_ADDR)) {
         digitalWrite(CE_PINS[index], LOW);
         return false;
     }
@@ -124,7 +96,7 @@ bool initialiseSensor(uint8_t index) {
     sensors[index].setAddress(ADDRESSES[index]);
 
     // Confirm the device now responds at its new address
-    if (!i2cProbe(Wire1, ADDRESSES[index])) {
+    if (!i2cProbe(ADDRESSES[index])) {
         digitalWrite(CE_PINS[index], LOW);
         return false;
     }
@@ -135,34 +107,7 @@ bool initialiseSensor(uint8_t index) {
 }
 
 /*
- * Probe both known BNO055 addresses on Wire (I2C0) and attempt begin().
- * Updates the global imuPresent flag and reconfigures the bno object to
- * use whichever address responds first.
- * Returns true on success.
- */
-bool initialiseIMU() {
-    uint8_t foundAddr = 0;
-
-    for (uint8_t i = 0; i < BNO055_NUM_ADDRESSES; i++) {
-        if (i2cProbe(Wire, BNO055_ADDRESSES[i])) {
-            foundAddr = BNO055_ADDRESSES[i];
-            break;
-        }
-    }
-
-    if (foundAddr == 0) return false;
-
-    // Re-construct with the confirmed address before calling begin()
-    bno = Adafruit_BNO055(55, foundAddr, &Wire);
-
-    if (!bno.begin()) return false;
-
-    bno.setExtCrystalUse(true);   // use external crystal for better accuracy
-    return true;
-}
-
-/*
- * Read the single-shot range from a present VL6180X sensor (mm).
+ * Read the single-shot range from a present sensor (mm).
  * Returns -1 on timeout or if the sensor is absent.
  */
 int16_t readSensorDistanceMM(uint8_t index) {
@@ -182,10 +127,10 @@ void setup() {
         while (!Serial && millis() - t0 < 3000);
     }
 
-    Serial.println("=== Pico 2 W + up to 8x VL6180X + BNO055 ===");
+    Serial.println("=== Pico 2 W + up to 8x Pololu VL6180X ===");
     Serial.println();
 
-    // Hold ALL VL6180X sensors in reset before touching the bus.
+    // Hold ALL sensors in reset before touching the bus.
     // Do this before waiting for 'S' so the bus is clean regardless
     // of how long the user takes to send the start command.
     for (uint8_t i = 0; i < MAX_SENSORS; i++) {
@@ -194,14 +139,9 @@ void setup() {
         sensorPresent[i] = false;
     }
 
-    // Initialise both I2C buses
-    Wire1.setSDA(TOF_SDA_PIN);
-    Wire1.setSCL(TOF_SCL_PIN);
+    Wire1.setSDA(SDA_PIN);
+    Wire1.setSCL(SCL_PIN);
     Wire1.begin();
-
-    Wire.setSDA(IMU_SDA_PIN);
-    Wire.setSCL(IMU_SCL_PIN);
-    Wire.begin();
 
     // -- Wait for start command --
     Serial.println("Send 'S' to begin sensor initialisation...");
@@ -209,8 +149,8 @@ void setup() {
     Serial.println("'S' received. Starting setup.");
     Serial.println();
 
-    // -- Sequential VL6180X bring-up --
-    Serial.println("Scanning for VL6180X sensors...");
+    // -- Sequential sensor bring-up --
+    Serial.println("Scanning for sensors...");
     Serial.println();
 
     for (uint8_t i = 0; i < MAX_SENSORS; i++) {
@@ -231,12 +171,14 @@ void setup() {
         } else {
             Serial.println("not found");
         }
+
+        delay(100);
     }
 
-    // -- VL6180X summary --
+    // -- Summary --
     Serial.println();
     Serial.println("------------------------------------------");
-    Serial.print("VL6180X sensors found: ");
+    Serial.print("Sensors found: ");
     Serial.print(numPresent);
     Serial.print(" / ");
     Serial.println(MAX_SENSORS);
@@ -270,17 +212,6 @@ void setup() {
     Serial.println("------------------------------------------");
     Serial.println();
 
-    // -- BNO055 init --
-    Serial.print("Scanning for BNO055 on GP");
-    Serial.print(IMU_SDA_PIN);
-    Serial.print("/GP");
-    Serial.print(IMU_SCL_PIN);
-    Serial.print(" ... ");
-
-    imuPresent = initialiseIMU();
-    Serial.println(imuPresent ? "FOUND" : "not found");
-    Serial.println();
-
     // -- Wait for logging command --
     Serial.println("Send 'L' to begin continuous sensor logging...");
     waitForChar('L');
@@ -298,10 +229,6 @@ void setup() {
             first = false;
         }
     }
-    if (imuPresent) {
-        if (!first) Serial.print(", ");
-        Serial.print("Yaw(deg), Pitch(deg), Roll(deg)");
-    }
     Serial.println();
 }
 
@@ -313,8 +240,6 @@ void loop() {
     lastRead = millis();
 
     bool first = true;
-
-    // VL6180X readings
     for (uint8_t i = 0; i < MAX_SENSORS; i++) {
         if (!sensorPresent[i]) continue;
 
@@ -329,21 +254,5 @@ void loop() {
 
         first = false;
     }
-
-    // BNO055 Euler angles
-    if (imuPresent) {
-        // VECTOR_EULER: x = yaw (heading), y = pitch, z = roll
-        imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-
-        if (!first) Serial.print(", ");
-        Serial.print(euler.x(), 1);   // Yaw
-        Serial.print(", ");
-        Serial.print(euler.y(), 1);   // Pitch
-        Serial.print(", ");
-        Serial.print(euler.z(), 1);   // Roll
-
-        first = false;
-    }
-
     Serial.println();
 }

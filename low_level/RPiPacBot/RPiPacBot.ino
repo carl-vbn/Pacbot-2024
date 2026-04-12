@@ -8,6 +8,7 @@
 #include "config.h"
 #include "sensors.h"
 #include "motors.h"
+#include "drive.h"
 #include "comms.h"
 
 // =====================================================================
@@ -17,54 +18,78 @@
 void setup() {
     Serial.begin(115200);
 
-    // Hardware init (CE pins low, I2C buses up) while WiFi connects on core 1
     sensorsHardwareInit();
+
+    // Init shared data before core 1 starts WiFi
+    commsSharedInit();
+
+    delay(500);
+
+    // Scan sensors FIRST, before WiFi or motors, so the I2C bus is
+    // free from interrupt interference (WiFi runs on core 1).
+    sensorsInit();
     motorsInit();
+    driveInit();
+
+    // Populate device info for core 1 to send once WiFi connects
+    uint8_t mask = 0;
+    for (uint8_t i = 0; i < MAX_SENSORS; i++) {
+        if (sensorPresent[i]) mask |= (1 << i);
+    }
+    commsSetDeviceInfo(numSensorsPresent, mask, imuPresent);
 }
 
+// How often the heading PID runs (ms)
+#define DRIVE_UPDATE_MS 10
+
 void loop() {
-    static uint32_t lastRead = 0;
+    static uint32_t lastRead  = 0;
+    static uint32_t lastDrive = 0;
 
-    RobotState st = commsGetState();
+    // -- Drive mode changes (handled in every state) -------------------
+    DriveMode newMode;
+    if (commsPollDriveMode(newMode)) {
+        float yaw = 0, pitch = 0, roll = 0;
+        imuReadEuler(yaw, pitch, roll);
+        driveSetMode(newMode, yaw);
+    }
 
-    // -- State machine (core 0 side) -----------------------------------
-    switch (st) {
-        case STATE_IDLE:
-            // Nothing to do -- core 1 sends alive heartbeats
-            break;
+    // -- Heading calibration -------------------------------------------
+    if (commsPollCalibrate()) {
+        float yaw = 0, pitch = 0, roll = 0;
+        imuReadEuler(yaw, pitch, roll);
+        driveCalibrateHeading(yaw);
+    }
 
-        case STATE_SETUP_REQ: {
-            // Server asked us to init sensors
-            sensorsInit();
-
-            // Build sensor presence bitmask
-            uint8_t mask = 0;
-            for (uint8_t i = 0; i < MAX_SENSORS; i++) {
-                if (sensorPresent[i]) mask |= (1 << i);
-            }
-
-            // Post device info so core 1 can send it
-            commsPostSensorData(numSensorsPresent, mask, nullptr,
-                                imuPresent, 0, 0, 0);
-
-            commsSetState(STATE_SETUP_DONE);
-            break;
+    // -- Motor / drive control -----------------------------------------
+    if (driveGetMode() == DRIVE_CARDINAL_LOCKED) {
+        // Accept cardinal direction commands
+        CardinalDir dir;
+        uint8_t speed;
+        if (commsPollCardinalCmd(dir, speed)) {
+            driveSetCardinal(dir, speed);
         }
 
-        case STATE_SETUP_DONE: {
-            // Waiting for CMD_START_LOG -- but motor commands are accepted
-            MotorState motorCmd[NUM_MOTORS];
-            if (commsPollMotorCmd(motorCmd)) {
-                motorsSetAll(motorCmd);
-            }
-            break;
+        // Run heading PID at ~100 Hz
+        if (millis() - lastDrive >= DRIVE_UPDATE_MS) {
+            lastDrive = millis();
+            float yaw = 0, pitch = 0, roll = 0;
+            imuReadEuler(yaw, pitch, roll);
+            driveUpdate(yaw);
         }
+    } else {
+        // Manual mode: apply raw motor commands from server
+        MotorState motorCmd[NUM_MOTORS];
+        if (commsPollMotorCmd(motorCmd)) {
+            motorsSetAll(motorCmd);
+        }
+    }
 
-        case STATE_LOGGING: {
-            if (millis() - lastRead < READ_INTERVAL_MS) break;
+    // -- Sensor logging (STATE_LOGGING only) ---------------------------
+    if (commsGetState() == STATE_LOGGING) {
+        if (millis() - lastRead >= READ_INTERVAL_MS) {
             lastRead = millis();
 
-            // Read all present ToF sensors
             int16_t readings[MAX_SENSORS];
             uint8_t idx = 0;
             for (uint8_t i = 0; i < MAX_SENSORS; i++) {
@@ -72,26 +97,15 @@ void loop() {
                 readings[idx++] = sensorReadMM(i);
             }
 
-            // Read IMU
             float yaw = 0, pitch = 0, roll = 0;
-            bool hasImu = imuReadEuler(yaw, pitch, roll);
+            imuReadEuler(yaw, pitch, roll);
 
-            // Build mask
             uint8_t mask = 0;
             for (uint8_t i = 0; i < MAX_SENSORS; i++) {
                 if (sensorPresent[i]) mask |= (1 << i);
             }
 
-            // Post to shared buffer for core 1
-            commsPostSensorData(idx, mask, readings, hasImu, yaw, pitch, roll);
-
-            // Check for motor commands from server
-            MotorState motorCmd[NUM_MOTORS];
-            if (commsPollMotorCmd(motorCmd)) {
-                motorsSetAll(motorCmd);
-            }
-
-            break;
+            commsPostSensorData(idx, mask, readings, imuPresent, yaw, pitch, roll);
         }
     }
 }

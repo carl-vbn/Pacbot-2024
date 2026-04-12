@@ -15,12 +15,15 @@
 #define MSG_PONG        0x05
 
 // -- Message types: Server -> Pi --------------------------------------
-#define CMD_SETUP       0x10
-#define CMD_START_LOG   0x11
-#define CMD_SET_MOTOR    0x12
-#define CMD_SET_MOTORS   0x15
-#define CMD_SET_INTERVAL 0x13
-#define CMD_PING         0x14
+#define CMD_START_LOG       0x11
+#define CMD_SET_MOTOR       0x12
+#define CMD_SET_MOTORS      0x15
+#define CMD_SET_INTERVAL    0x13
+#define CMD_PING            0x14
+#define CMD_STATUS          0x16
+#define CMD_SET_DRIVE_MODE  0x17
+#define CMD_CARDINAL_MOVE   0x18
+#define CMD_CALIBRATE       0x19
 
 // -- Log severity levels -----------------------------------------------
 #define LOG_DEBUG   0

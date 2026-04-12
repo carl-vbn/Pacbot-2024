@@ -107,6 +107,14 @@ Change the sensor data send rate. Minimum 10 ms.
 | 0      | 1    | type        | `0x13`                         |
 | 1      | 2    | interval_ms | `uint16` new send interval ms  |
 
+### CMD_RESCAN_SENSORS (0x16) -- 1 byte
+
+Re-initialise all ToF sensors and the IMU at runtime. Accepted in SETUP_DONE and LOGGING states. The Pi will power-cycle all sensor CE lines, re-run the init sequence, and send a fresh DEVICE_INFO with the updated sensor mask.
+
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0      | 1    | type  | `0x16`      |
+
 ### CMD_PING (0x14) -- 1 byte
 
 Latency probe. Pi responds with PONG.

@@ -31,6 +31,9 @@ static void sendLogMsg(uint8_t severity, const char *text) {
     sendPacket(txBuf, len);
 }
 
+// -- Forward declarations ----------------------------------------------
+static void sendDeviceInfo();
+
 // -- Inbound command handling ------------------------------------------
 
 static void handleRx() {
@@ -42,17 +45,9 @@ static void handleRx() {
         uint8_t type = rxBuf[0];
 
         switch (type) {
-            case CMD_SETUP: {
-                RobotState cur = commsGetState();
-                if (cur == STATE_IDLE) {
-                    commsSetState(STATE_SETUP_REQ);
-                }
-                break;
-            }
-
             case CMD_START_LOG: {
                 RobotState cur = commsGetState();
-                if (cur == STATE_SETUP_DONE) {
+                if (cur == STATE_IDLE) {
                     commsSetState(STATE_LOGGING);
                 }
                 break;
@@ -60,7 +55,7 @@ static void handleRx() {
 
             case CMD_SET_MOTOR: {
                 RobotState cur = commsGetState();
-                if (n >= 4 && (cur == STATE_SETUP_DONE || cur == STATE_LOGGING)) {
+                if (n >= 4 && (cur == STATE_IDLE || cur == STATE_LOGGING)) {
                     uint8_t idx = rxBuf[1];
                     int16_t speed;
                     memcpy(&speed, rxBuf + 2, 2);
@@ -77,7 +72,7 @@ static void handleRx() {
 
             case CMD_SET_MOTORS: {
                 RobotState cur = commsGetState();
-                if (n >= 1 + NUM_MOTORS * 2 && (cur == STATE_SETUP_DONE || cur == STATE_LOGGING)) {
+                if (n >= 1 + NUM_MOTORS * 2 && (cur == STATE_IDLE || cur == STATE_LOGGING)) {
                     mutex_enter_blocking(&commsSharedMutex);
                     for (uint8_t i = 0; i < NUM_MOTORS; i++) {
                         int16_t speed;
@@ -101,6 +96,47 @@ static void handleRx() {
                         mutex_exit(&commsSharedMutex);
                     }
                 }
+                break;
+            }
+
+            case CMD_STATUS: {
+                sendDeviceInfo();
+                break;
+            }
+
+            case CMD_SET_DRIVE_MODE: {
+                if (n >= 2) {
+                    uint8_t m = rxBuf[1];
+                    if (m <= DRIVE_CARDINAL_LOCKED) {
+                        mutex_enter_blocking(&commsSharedMutex);
+                        commsShared.pendingDriveMode    = (DriveMode)m;
+                        commsShared.driveModeCmdPending = true;
+                        mutex_exit(&commsSharedMutex);
+                    }
+                }
+                break;
+            }
+
+            case CMD_CARDINAL_MOVE: {
+                RobotState cur = commsGetState();
+                if (n >= 3 && (cur == STATE_IDLE || cur == STATE_LOGGING)) {
+                    uint8_t dir   = rxBuf[1];
+                    uint8_t speed = rxBuf[2];
+                    if (dir <= DIR_WEST) {
+                        mutex_enter_blocking(&commsSharedMutex);
+                        commsShared.pendingCardinalDir   = (CardinalDir)dir;
+                        commsShared.pendingCardinalSpeed = speed;
+                        commsShared.cardinalCmdPending   = true;
+                        mutex_exit(&commsSharedMutex);
+                    }
+                }
+                break;
+            }
+
+            case CMD_CALIBRATE: {
+                mutex_enter_blocking(&commsSharedMutex);
+                commsShared.calibratePending = true;
+                mutex_exit(&commsSharedMutex);
                 break;
             }
 
@@ -158,6 +194,15 @@ static void sendSensorData() {
 
 // -- Core 0 helpers ----------------------------------------------------
 
+void commsSetDeviceInfo(uint8_t count, uint8_t mask, bool hasImu) {
+    mutex_enter_blocking(&commsSharedMutex);
+    commsShared.sensorCount    = count;
+    commsShared.sensorMask     = mask;
+    commsShared.hasImu         = hasImu;
+    commsShared.deviceInfoReady = true;
+    mutex_exit(&commsSharedMutex);
+}
+
 void commsPostSensorData(uint8_t count, uint8_t mask, const int16_t *readings,
                          bool hasImu, float yaw, float pitch, float roll) {
     mutex_enter_blocking(&commsSharedMutex);
@@ -168,7 +213,8 @@ void commsPostSensorData(uint8_t count, uint8_t mask, const int16_t *readings,
     commsShared.pitch = pitch;
     commsShared.roll  = roll;
     commsShared.dataTimestamp = millis();
-    memcpy(commsShared.sensorReadings, readings, count * sizeof(int16_t));
+    if (readings && count > 0)
+        memcpy(commsShared.sensorReadings, readings, count * sizeof(int16_t));
     mutex_exit(&commsSharedMutex);
 }
 
@@ -179,6 +225,37 @@ bool commsPollMotorCmd(MotorState out[NUM_MOTORS]) {
         memcpy(out, commsShared.motorCmd, sizeof(MotorState) * NUM_MOTORS);
         commsShared.motorCmdPending = false;
     }
+    mutex_exit(&commsSharedMutex);
+    return pending;
+}
+
+bool commsPollDriveMode(DriveMode &mode) {
+    mutex_enter_blocking(&commsSharedMutex);
+    bool pending = commsShared.driveModeCmdPending;
+    if (pending) {
+        mode = commsShared.pendingDriveMode;
+        commsShared.driveModeCmdPending = false;
+    }
+    mutex_exit(&commsSharedMutex);
+    return pending;
+}
+
+bool commsPollCardinalCmd(CardinalDir &dir, uint8_t &speed) {
+    mutex_enter_blocking(&commsSharedMutex);
+    bool pending = commsShared.cardinalCmdPending;
+    if (pending) {
+        dir   = commsShared.pendingCardinalDir;
+        speed = commsShared.pendingCardinalSpeed;
+        commsShared.cardinalCmdPending = false;
+    }
+    mutex_exit(&commsSharedMutex);
+    return pending;
+}
+
+bool commsPollCalibrate() {
+    mutex_enter_blocking(&commsSharedMutex);
+    bool pending = commsShared.calibratePending;
+    if (pending) commsShared.calibratePending = false;
     mutex_exit(&commsSharedMutex);
     return pending;
 }
@@ -195,13 +272,14 @@ void commsSetState(RobotState s) {
 
 // -- Core 1 entry points -----------------------------------------------
 
-void commsSetup() {
+void commsSharedInit() {
     mutex_init(&commsSharedMutex);
-
     memset(&commsShared, 0, sizeof(commsShared));
     commsShared.state          = STATE_IDLE;
     commsShared.sendIntervalMs = SEND_INTERVAL_MS;
+}
 
+void commsSetup() {
     serverIP.fromString(SERVER_IP);
 
     WiFi.mode(WIFI_STA);
@@ -214,7 +292,7 @@ void commsSetup() {
 
     udp.begin(0);  // ephemeral port -- server learns it from first packet
 
-    // Send first alive immediately
+    // Send first alive immediately (device info is sent once core 0 signals ready)
     sendAlive();
     lastAliveSent = millis();
 }
@@ -227,25 +305,25 @@ void commsLoop() {
     uint32_t now  = millis();
 
     switch (st) {
-        case STATE_IDLE:
-            // Heartbeat every ALIVE_INTERVAL_MS
+        case STATE_IDLE: {
+            // Send device info once core 0 has populated it
+            if (!deviceInfoSent) {
+                bool ready;
+                mutex_enter_blocking(&commsSharedMutex);
+                ready = commsShared.deviceInfoReady;
+                mutex_exit(&commsSharedMutex);
+                if (ready) {
+                    sendDeviceInfo();
+                    deviceInfoSent = true;
+                }
+            }
+
             if (now - lastAliveSent >= ALIVE_INTERVAL_MS) {
                 sendAlive();
                 lastAliveSent = now;
             }
             break;
-
-        case STATE_SETUP_REQ:
-            // Waiting for core 0 to finish sensor init -- nothing to send
-            break;
-
-        case STATE_SETUP_DONE:
-            // Send device info once, then wait for CMD_START_LOG
-            if (!deviceInfoSent) {
-                sendDeviceInfo();
-                deviceInfoSent = true;
-            }
-            break;
+        }
 
         case STATE_LOGGING: {
             uint16_t interval;
