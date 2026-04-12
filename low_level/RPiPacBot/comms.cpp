@@ -53,6 +53,14 @@ static void handleRx() {
                 break;
             }
 
+            case CMD_STOP_LOG: {
+                RobotState cur = commsGetState();
+                if (cur == STATE_LOGGING) {
+                    commsSetState(STATE_IDLE);
+                }
+                break;
+            }
+
             case CMD_SET_MOTOR: {
                 RobotState cur = commsGetState();
                 if (n >= 4 && (cur == STATE_IDLE || cur == STATE_LOGGING)) {

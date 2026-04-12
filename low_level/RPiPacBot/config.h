@@ -34,9 +34,9 @@ const uint8_t ADDRESSES[MAX_SENSORS] = { 0x28,0x2A,0x2B,0x2C,0x2D,0x2E,0x2F,0x30
 //   Slot 2 → CE GP13    Slot 6 → CE GP4
 //   Slot 3 → CE GP0     Slot 7 → CE GP5
 #define SENSOR_IDX_NORTH  0
-#define SENSOR_IDX_EAST   1
-#define SENSOR_IDX_SOUTH  2
-#define SENSOR_IDX_WEST   3
+#define SENSOR_IDX_EAST   3
+#define SENSOR_IDX_SOUTH  1
+#define SENSOR_IDX_WEST   2
 
 // -- BNO055 IMU --------------------------------------------------------
 #define IMU_SDA_PIN   20

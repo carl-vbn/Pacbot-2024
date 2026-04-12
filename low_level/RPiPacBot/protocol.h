@@ -16,6 +16,7 @@
 
 // -- Message types: Server -> Pi --------------------------------------
 #define CMD_START_LOG       0x11
+#define CMD_STOP_LOG        0x1A
 #define CMD_SET_MOTOR       0x12
 #define CMD_SET_MOTORS      0x15
 #define CMD_SET_INTERVAL    0x13

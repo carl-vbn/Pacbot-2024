@@ -27,6 +27,7 @@ MSG_LOG         = 0x04
 MSG_PONG        = 0x05
 
 CMD_START_LOG       = 0x11
+CMD_STOP_LOG        = 0x1A
 CMD_SET_MOTOR       = 0x12
 CMD_SET_MOTORS      = 0x15
 CMD_SET_INTERVAL    = 0x13
@@ -340,7 +341,7 @@ class TestServer:
         print(f"Waiting for first Pi packet to learn its address...")
         print()
         print("Commands:")
-        print("  log               Send CMD_START_LOG")
+        print("  log start|stop    Start or stop sensor logging")
         print("  status            Request device info (connected sensors/IMU)")
         print("  mode manual|cardinal  Switch drive mode")
         print("  calibrate         Set current heading as north")
@@ -373,8 +374,15 @@ class TestServer:
                     break
 
                 elif cmd == "log":
-                    self.send_cmd(bytes([CMD_START_LOG]))
-                    print("  -> CMD_START_LOG sent")
+                    if len(parts) != 2 or parts[1] not in ("start", "stop"):
+                        print("  Usage: log start|stop")
+                        continue
+                    if parts[1] == "start":
+                        self.send_cmd(bytes([CMD_START_LOG]))
+                        print("  -> CMD_START_LOG sent")
+                    else:
+                        self.send_cmd(bytes([CMD_STOP_LOG]))
+                        print("  -> CMD_STOP_LOG sent")
 
                 elif cmd == "motor":
                     if len(parts) != 3:
