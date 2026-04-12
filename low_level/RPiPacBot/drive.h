@@ -30,10 +30,9 @@ void driveSetMode(DriveMode mode, float currentYaw);
 // Get the current drive mode.
 DriveMode driveGetMode();
 
-// Calibrate: record reference heading and lane-center distances.
-// lateralRef[4] = { northDist, eastDist, southDist, westDist }.
-// Pass -1 for any absent sensor.
-void driveCalibrate(float currentYaw, const int16_t lateralRef[4]);
+// Calibrate: record reference heading and lateral distances for
+// single-wall centering fallback.
+void driveCalibrate(float currentYaw, int16_t leftDist, int16_t rightDist);
 
 // Set the active cardinal direction and base speed (0-255).
 void driveSetCardinal(CardinalDir dir, uint8_t speed);
@@ -47,6 +46,14 @@ bool driveUpdate(float currentYaw);
 // leftDist / rightDist come from the sensors returned by
 // driveGetLateralSensors().  Pass -1 if a sensor is absent/errored.
 void driveUpdateCentering(int16_t leftDist, int16_t rightDist);
+
+// Update forward distance PID.  Maintains FORWARD_TARGET_MM from the
+// wall ahead — backs off when too close, advances when too far.
+void driveUpdateForward(int16_t forwardDist);
+
+// Get the sensor index ahead of the current movement direction.
+// Returns false when stopped.
+bool driveGetForwardSensor(uint8_t &idx);
 
 // Get the sensor indices for the perpendicular axis of the current
 // cardinal direction.  Returns false when stopped / no centering needed.

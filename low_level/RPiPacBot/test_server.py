@@ -232,8 +232,12 @@ class ControlGUI:
 
         # --- Key bindings ---
         key_map = {k.lower(): a for a, k in self.ACTIONS}
-        self.root.bind("<KeyPress>", lambda e: self._on_action(key_map[e.char])
-                       if e.char in key_map else None)
+        def _on_key(e):
+            if e.char == 'm':
+                self._toggle_mode()
+            elif e.char in key_map:
+                self._on_action(key_map[e.char])
+        self.root.bind("<KeyPress>", _on_key)
 
     def _calibrate(self):
         self.server.send_cmd(bytes([CMD_CALIBRATE]))

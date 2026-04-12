@@ -54,7 +54,7 @@ static bool initialiseSensor(uint8_t index) {
     }
 
     tofSensors[index].configureDefault();
-    tofSensors[index].stopContinuous();
+    tofSensors[index].startRangeContinuous();
     return true;
 }
 
@@ -132,7 +132,7 @@ uint8_t sensorsInit() {
 int16_t sensorReadMM(uint8_t index) {
     if (index >= MAX_SENSORS || !sensorPresent[index]) return -1;
 
-    uint8_t range = tofSensors[index].readRangeSingleMillimeters();
+    uint8_t range = tofSensors[index].readRangeContinuous();
 
     if (tofSensors[index].timeoutOccurred()) return -1;
     return (int16_t)range;

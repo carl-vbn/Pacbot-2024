@@ -7,9 +7,9 @@ static const float MIX_RIGHT[NUM_MOTORS]  = {  0, -1, -1,  0 };
 static const float MIX_ROT_CW[NUM_MOTORS] = { -1, -1,  1, -1 };
 
 // -- Heading PID gains -------------------------------------------------
-static const float KP = 3.0f;
+static const float KP = 2.0f;
 static const float KI = 0.05f;
-static const float KD = 0.5f;
+static const float KD = 0.1f;
 static const float INTEGRAL_LIMIT = 100.0f;
 
 // -- Centering PID gains -----------------------------------------------
@@ -18,6 +18,14 @@ static const float CENTER_KI = 0.0f;
 static const float CENTER_KD = 0.2f;
 static const float CENTER_INTEGRAL_LIMIT = 80.0f;
 
+// -- Forward distance PID ----------------------------------------------
+static const int16_t FORWARD_TARGET_MM       = 10;   // desired wall distance
+static const float   FWD_KP                  = 1.0f;
+static const float   FWD_KI                  = -0.2f;
+static const float   FWD_KD                  = 0.01f;
+static const float   FWD_INTEGRAL_LIMIT      = 80.0f;
+static const float   FWD_DERIV_ALPHA         = 0.6f;  // derivative low-pass (0-1, lower = smoother)
+
 // -- State -------------------------------------------------------------
 static DriveMode   mode        = DRIVE_MANUAL;
 static float       refYaw      = 0.0f;
@@ -25,17 +33,25 @@ static CardinalDir curDir      = DIR_STOP;
 static uint8_t     curSpeed    = 0;
 
 // Heading PID
-static float       pidIntegral = 0.0f;
-static float       pidLastErr  = 0.0f;
-static uint32_t    pidLastTime = 0;
+static float       pidIntegral  = 0.0f;
+static float       pidLastYaw   = 0.0f;  // derivative on measurement, not error
+static uint32_t    pidLastTime  = 0;
 
 // Centering
 static bool        calibrated        = false;
-static int16_t     refDist[4]        = {-1, -1, -1, -1};  // N, E, S, W
+static int16_t     refLeft           = -1;   // calibrated left-wall distance
+static int16_t     refRight          = -1;   // calibrated right-wall distance
 static float       centerIntegral    = 0.0f;
 static float       centerLastErr     = 0.0f;
 static uint32_t    centerLastTime    = 0;
 static float       lateralCorrection = 0.0f;
+
+// Forward distance PID
+static float       fwdCorrection     = 0.0f;
+static float       fwdIntegral       = 0.0f;
+static float       fwdLastErr        = 0.0f;
+static float       fwdDerivFiltered  = 0.0f;
+static uint32_t    fwdLastTime       = 0;
 
 // -- Helpers -----------------------------------------------------------
 
@@ -85,7 +101,7 @@ void driveInit() {
     mode             = DRIVE_MANUAL;
     calibrated       = false;
     pidIntegral      = 0.0f;
-    pidLastErr       = 0.0f;
+    pidLastYaw       = 0.0f;
     pidLastTime      = 0;
     lateralCorrection = 0.0f;
 }
@@ -95,11 +111,12 @@ void driveSetMode(DriveMode m, float currentYaw) {
     if (m == DRIVE_CARDINAL_LOCKED) {
         refYaw      = currentYaw;
         pidIntegral = 0.0f;
-        pidLastErr  = 0.0f;
+        pidLastYaw  = currentYaw;
         pidLastTime = millis();
         curDir      = DIR_STOP;
         curSpeed    = 0;
         lateralCorrection = 0.0f;
+        fwdCorrection     = 0.0f;
     }
     if (m == DRIVE_MANUAL) {
         motorsStop();
@@ -110,35 +127,60 @@ DriveMode driveGetMode() {
     return mode;
 }
 
-void driveCalibrate(float currentYaw, const int16_t lateralRef[4]) {
-    refYaw = currentYaw;
-    memcpy(refDist, lateralRef, sizeof(refDist));
+void driveCalibrate(float currentYaw, int16_t leftDist, int16_t rightDist) {
+    refYaw   = currentYaw;
+    refLeft  = leftDist;
+    refRight = rightDist;
     calibrated = true;
 
     // Reset both PIDs
     pidIntegral       = 0.0f;
-    pidLastErr        = 0.0f;
+    pidLastYaw        = 0.0f;
     pidLastTime       = millis();
     centerIntegral    = 0.0f;
     centerLastErr     = 0.0f;
     centerLastTime    = 0;
     lateralCorrection = 0.0f;
+    fwdCorrection     = 0.0f;
+    fwdIntegral       = 0.0f;
+    fwdLastErr        = 0.0f;
+    fwdDerivFiltered  = 0.0f;
+    fwdLastTime       = 0;
 }
 
 void driveSetCardinal(CardinalDir dir, uint8_t speed) {
     if (dir != curDir) {
-        // Perpendicular axis changed — reset centering PID
+        // Axes changed — reset centering and forward PIDs
         centerIntegral    = 0.0f;
         centerLastErr     = 0.0f;
         centerLastTime    = 0;
         lateralCorrection = 0.0f;
+        fwdCorrection     = 0.0f;
+        fwdIntegral       = 0.0f;
+        fwdLastErr        = 0.0f;
+        fwdDerivFiltered  = 0.0f;
+        fwdLastTime       = 0;
     }
     curDir   = dir;
     curSpeed = speed;
 }
 
+bool driveGetForwardSensor(uint8_t &idx) {
+    static const uint8_t CARD_TO_SENSOR[4] = {
+        SENSOR_IDX_NORTH, SENSOR_IDX_EAST,
+        SENSOR_IDX_SOUTH, SENSOR_IDX_WEST
+    };
+
+    switch (curDir) {
+        case DIR_NORTH: idx = CARD_TO_SENSOR[0]; return true;
+        case DIR_EAST:  idx = CARD_TO_SENSOR[1]; return true;
+        case DIR_SOUTH: idx = CARD_TO_SENSOR[2]; return true;
+        case DIR_WEST:  idx = CARD_TO_SENSOR[3]; return true;
+        default: return false;
+    }
+}
+
 bool driveGetLateralSensors(uint8_t &leftIdx, uint8_t &rightIdx) {
-    // Map cardinal index → hardware sensor index
     static const uint8_t CARD_TO_SENSOR[4] = {
         SENSOR_IDX_NORTH, SENSOR_IDX_EAST,
         SENSOR_IDX_SOUTH, SENSOR_IDX_WEST
@@ -149,6 +191,30 @@ bool driveGetLateralSensors(uint8_t &leftIdx, uint8_t &rightIdx) {
     leftIdx  = CARD_TO_SENSOR[lc];
     rightIdx = CARD_TO_SENSOR[rc];
     return true;
+}
+
+void driveUpdateForward(int16_t forwardDist) {
+    if (forwardDist < 0) return;           // sensor error — keep last value
+
+    // Positive error → too far from wall → move forward
+    // Negative error → too close          → back off
+    float error = (float)(forwardDist - FORWARD_TARGET_MM);
+
+    uint32_t now = millis();
+    float dt = (fwdLastTime == 0) ? 0.05f : (now - fwdLastTime) / 1000.0f;
+    if (dt < 0.001f) dt = 0.001f;
+    fwdLastTime = now;
+
+    fwdIntegral += error * dt;
+    fwdIntegral  = constrain(fwdIntegral, -FWD_INTEGRAL_LIMIT, FWD_INTEGRAL_LIMIT);
+
+    float rawDeriv = (error - fwdLastErr) / dt;
+    fwdLastErr     = error;
+
+    // Low-pass filter on derivative to suppress sensor noise
+    fwdDerivFiltered += FWD_DERIV_ALPHA * (rawDeriv - fwdDerivFiltered);
+
+    fwdCorrection = FWD_KP * error + FWD_KI * fwdIntegral + FWD_KD * fwdDerivFiltered;
 }
 
 bool driveUpdate(float currentYaw) {
@@ -165,8 +231,12 @@ bool driveUpdate(float currentYaw) {
     pidIntegral += err * dt;
     pidIntegral  = constrain(pidIntegral, -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
 
-    float deriv = (err - pidLastErr) / dt;
-    pidLastErr  = err;
+    // Derivative on measurement (not error) to avoid kick on sudden
+    // disturbances like wall collisions.  Negate because increasing yaw
+    // means decreasing error.
+    float yawDelta = wrapAngle(currentYaw - pidLastYaw);
+    float deriv = -yawDelta / dt;
+    pidLastYaw  = currentYaw;
 
     float headingCorr = KP * err + KI * pidIntegral + KD * deriv;
     headingCorr = constrain(headingCorr, -255.0f, 255.0f);
@@ -185,13 +255,18 @@ bool driveUpdate(float currentYaw) {
     float latMix[NUM_MOTORS];
     getLateralMix(latMix);
 
+    // -- Forward speed: PID-controlled, clamped to ±curSpeed -------------
+    float effectiveSpeed = constrain(fwdCorrection,
+                                     -(float)curSpeed, (float)curSpeed);
+    float speedFrac = curSpeed / 255.0f;
+
     // -- Combine: movement + heading + centering -----------------------
     MotorState out[NUM_MOTORS];
     for (uint8_t i = 0; i < NUM_MOTORS; i++) {
-        float val = fwd   * MIX_FWD[i]    * curSpeed
-                  + right * MIX_RIGHT[i]   * curSpeed
+        float val = fwd   * MIX_FWD[i]    * effectiveSpeed
+                  + right * MIX_RIGHT[i]   * effectiveSpeed
                   + headingCorr            * MIX_ROT_CW[i]
-                  + lateralCorrection      * latMix[i];
+                  + lateralCorrection      * latMix[i]      * speedFrac;
         int16_t clamped = constrain((int16_t)val, -255, 255);
         out[i].direction = (clamped < 0) ? 1 : 0;
         out[i].speed     = (uint8_t)abs(clamped);
@@ -207,19 +282,24 @@ void driveUpdateCentering(int16_t leftDist, int16_t rightDist) {
         return;
     }
 
-    // Which reference distances correspond to left / right?
-    uint8_t lc, rc;
-    if (!getLateralCardinals(lc, rc)) return;
+    // A reading above 100 means no wall nearby — treat as floating.
+    bool leftValid  = leftDist  >= 0 && leftDist  <= 100;
+    bool rightValid = rightDist >= 0 && rightDist <= 100;
 
-    int16_t leftRef  = refDist[lc];
-    int16_t rightRef = refDist[rc];
-
-    // Skip if any reading or reference is invalid
-    if (leftDist < 0 || rightDist < 0 || leftRef < 0 || rightRef < 0) return;
+    if (!leftValid && !rightValid) return;
 
     // Error: positive ⇒ drifted right relative to movement direction.
-    // (left wall farther away, right wall closer)
-    float error = (float)(leftDist - leftRef) - (float)(rightDist - rightRef);
+    float error;
+    if (leftValid && rightValid) {
+        // Both walls visible — aim for equal distance (center of lane)
+        error = (float)(leftDist - rightDist);
+    } else if (leftValid) {
+        // Only left wall — hold calibrated distance from it
+        error = 2.0f * (float)(leftDist - refLeft);
+    } else {
+        // Only right wall — hold calibrated distance from it
+        error = -2.0f * (float)(rightDist - refRight);
+    }
 
     // PID
     uint32_t now = millis();

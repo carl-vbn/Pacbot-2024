@@ -60,17 +60,22 @@ void loop() {
         float yaw = 0, pitch = 0, roll = 0;
         imuReadEuler(yaw, pitch, roll);
 
-        int16_t lateralRef[4] = {
-            sensorReadMM(SENSOR_IDX_NORTH),
-            sensorReadMM(SENSOR_IDX_EAST),
-            sensorReadMM(SENSOR_IDX_SOUTH),
-            sensorReadMM(SENSOR_IDX_WEST),
-        };
+        int16_t leftDist  = sensorReadMM(SENSOR_IDX_WEST);
+        int16_t rightDist = sensorReadMM(SENSOR_IDX_EAST);
 
-        driveCalibrate(yaw, lateralRef);
+        driveCalibrate(yaw, leftDist, rightDist);
     }
 
     // -- Motor / drive control -----------------------------------------
+    // A raw motor command always drops to manual mode
+    MotorState motorCmd[NUM_MOTORS];
+    if (commsPollMotorCmd(motorCmd)) {
+        if (driveGetMode() != DRIVE_MANUAL) {
+            driveSetMode(DRIVE_MANUAL, 0);
+        }
+        motorsSetAll(motorCmd);
+    }
+
     if (driveGetMode() == DRIVE_CARDINAL_LOCKED) {
         // Accept cardinal direction commands
         CardinalDir dir;
@@ -87,21 +92,23 @@ void loop() {
             driveUpdate(yaw);
         }
 
-        // Run centering PID at ~20 Hz (reads two ToF sensors)
+        // Run centering + forward braking at ~20 Hz (reads ToF sensors)
         if (millis() - lastCenter >= CENTER_UPDATE_MS) {
             lastCenter = millis();
+
+            // Lateral centering
             uint8_t leftIdx, rightIdx;
             if (driveGetLateralSensors(leftIdx, rightIdx)) {
                 int16_t leftDist  = sensorReadMM(leftIdx);
                 int16_t rightDist = sensorReadMM(rightIdx);
                 driveUpdateCentering(leftDist, rightDist);
             }
-        }
-    } else {
-        // Manual mode: apply raw motor commands from server
-        MotorState motorCmd[NUM_MOTORS];
-        if (commsPollMotorCmd(motorCmd)) {
-            motorsSetAll(motorCmd);
+
+            // Forward braking
+            uint8_t fwdIdx;
+            if (driveGetForwardSensor(fwdIdx)) {
+                driveUpdateForward(sensorReadMM(fwdIdx));
+            }
         }
     }
 
