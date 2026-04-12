@@ -48,13 +48,16 @@ inline uint8_t buildAlive(uint8_t *buf, uint32_t uptimeMs) {
     return 5;
 }
 
-// DEVICE_INFO: 4 bytes
+// DEVICE_INFO: 4 + MAX_SENSORS bytes
+//   [type][sensor_mask][imu][num_motors][ce_pin_0]..[ce_pin_N]
 inline uint8_t buildDeviceInfo(uint8_t *buf, uint8_t sensorMask, bool imu) {
     buf[0] = MSG_DEVICE_INFO;
     buf[1] = sensorMask;
     buf[2] = imu ? 1 : 0;
     buf[3] = NUM_MOTORS;
-    return 4;
+    for (uint8_t i = 0; i < MAX_SENSORS; i++)
+        buf[4 + i] = CE_PINS[i];
+    return 4 + MAX_SENSORS;
 }
 
 // SENSOR_DATA: variable length

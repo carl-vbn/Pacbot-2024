@@ -27,6 +27,17 @@
 const uint8_t CE_PINS[MAX_SENSORS]   = { 17,  2,   13,  0,   1,   3,   4,   5   };
 const uint8_t ADDRESSES[MAX_SENSORS] = { 0x28,0x2A,0x2B,0x2C,0x2D,0x2E,0x2F,0x30 };
 
+// -- Sensor-to-cardinal mapping (for lane centering) -------------------
+// Sensor slot index facing each direction.  Adjust to match wiring.
+//   Slot 0 → CE GP17    Slot 4 → CE GP1
+//   Slot 1 → CE GP2     Slot 5 → CE GP3
+//   Slot 2 → CE GP13    Slot 6 → CE GP4
+//   Slot 3 → CE GP0     Slot 7 → CE GP5
+#define SENSOR_IDX_NORTH  0
+#define SENSOR_IDX_EAST   1
+#define SENSOR_IDX_SOUTH  2
+#define SENSOR_IDX_WEST   3
+
 // -- BNO055 IMU --------------------------------------------------------
 #define IMU_SDA_PIN   20
 #define IMU_SCL_PIN   21

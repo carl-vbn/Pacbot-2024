@@ -88,9 +88,12 @@ def decode_packet(data: bytes) -> str:
         if len(data) < 4:
             return f"[DEVICE_INFO] incomplete ({len(data)} bytes)"
         mask, imu, motors = data[1], data[2], data[3]
-        slots = [i for i in range(8) if mask & (1 << i)]
-        return (f"[DEVICE_INFO] sensors={slots} imu={'yes' if imu else 'no'} "
-                f"motors={motors}")
+        ce_pins = list(data[4:4+8]) if len(data) >= 12 else []
+        present = [f"slot {i} (CE GP{ce_pins[i]})" if ce_pins
+                   else f"slot {i}"
+                   for i in range(8) if mask & (1 << i)]
+        return (f"[DEVICE_INFO] sensors=[{', '.join(present)}] "
+                f"imu={'yes' if imu else 'no'} motors={motors}")
 
     elif msg_type == MSG_SENSOR_DATA:
         if len(data) < 6:

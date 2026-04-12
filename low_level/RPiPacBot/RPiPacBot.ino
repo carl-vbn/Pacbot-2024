@@ -39,12 +39,13 @@ void setup() {
     commsSetDeviceInfo(numSensorsPresent, mask, imuPresent);
 }
 
-// How often the heading PID runs (ms)
-#define DRIVE_UPDATE_MS 10
+#define DRIVE_UPDATE_MS  10   // heading PID rate (~100 Hz)
+#define CENTER_UPDATE_MS 50   // centering PID rate (~20 Hz)
 
 void loop() {
-    static uint32_t lastRead  = 0;
-    static uint32_t lastDrive = 0;
+    static uint32_t lastRead   = 0;
+    static uint32_t lastDrive  = 0;
+    static uint32_t lastCenter = 0;
 
     // -- Drive mode changes (handled in every state) -------------------
     DriveMode newMode;
@@ -54,11 +55,19 @@ void loop() {
         driveSetMode(newMode, yaw);
     }
 
-    // -- Heading calibration -------------------------------------------
+    // -- Calibration (heading + lane center) ---------------------------
     if (commsPollCalibrate()) {
         float yaw = 0, pitch = 0, roll = 0;
         imuReadEuler(yaw, pitch, roll);
-        driveCalibrateHeading(yaw);
+
+        int16_t lateralRef[4] = {
+            sensorReadMM(SENSOR_IDX_NORTH),
+            sensorReadMM(SENSOR_IDX_EAST),
+            sensorReadMM(SENSOR_IDX_SOUTH),
+            sensorReadMM(SENSOR_IDX_WEST),
+        };
+
+        driveCalibrate(yaw, lateralRef);
     }
 
     // -- Motor / drive control -----------------------------------------
@@ -76,6 +85,17 @@ void loop() {
             float yaw = 0, pitch = 0, roll = 0;
             imuReadEuler(yaw, pitch, roll);
             driveUpdate(yaw);
+        }
+
+        // Run centering PID at ~20 Hz (reads two ToF sensors)
+        if (millis() - lastCenter >= CENTER_UPDATE_MS) {
+            lastCenter = millis();
+            uint8_t leftIdx, rightIdx;
+            if (driveGetLateralSensors(leftIdx, rightIdx)) {
+                int16_t leftDist  = sensorReadMM(leftIdx);
+                int16_t rightDist = sensorReadMM(rightIdx);
+                driveUpdateCentering(leftDist, rightDist);
+            }
         }
     } else {
         // Manual mode: apply raw motor commands from server

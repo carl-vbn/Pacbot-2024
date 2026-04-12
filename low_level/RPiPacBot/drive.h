@@ -30,13 +30,24 @@ void driveSetMode(DriveMode mode, float currentYaw);
 // Get the current drive mode.
 DriveMode driveGetMode();
 
-// Reset the reference heading to the given yaw.
-void driveCalibrateHeading(float currentYaw);
+// Calibrate: record reference heading and lane-center distances.
+// lateralRef[4] = { northDist, eastDist, southDist, westDist }.
+// Pass -1 for any absent sensor.
+void driveCalibrate(float currentYaw, const int16_t lateralRef[4]);
 
 // Set the active cardinal direction and base speed (0-255).
 void driveSetCardinal(CardinalDir dir, uint8_t speed);
 
-// Run one PID iteration with the latest IMU yaw.
-// Computes motor outputs and applies them.  Only acts in CARDINAL_LOCKED
-// mode.  Returns true if motors were updated.
+// Run one heading-PID iteration with the latest IMU yaw.
+// Also applies the most recent lateral correction.
+// Returns true if motors were updated.
 bool driveUpdate(float currentYaw);
+
+// Run one centering-PID iteration with fresh lateral sensor readings.
+// leftDist / rightDist come from the sensors returned by
+// driveGetLateralSensors().  Pass -1 if a sensor is absent/errored.
+void driveUpdateCentering(int16_t leftDist, int16_t rightDist);
+
+// Get the sensor indices for the perpendicular axis of the current
+// cardinal direction.  Returns false when stopped / no centering needed.
+bool driveGetLateralSensors(uint8_t &leftIdx, uint8_t &rightIdx);
