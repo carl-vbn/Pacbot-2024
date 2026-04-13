@@ -1,0 +1,110 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  color: #0f0;
+  font-family: 'Courier New', monospace;
+  overflow-x: hidden;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  border-bottom: 1px solid #333;
+}
+
+header h1 {
+  font-size: 18px;
+  letter-spacing: 3px;
+  color: #0f0;
+}
+
+.connection-status {
+  display: flex;
+  gap: 16px;
+}
+
+.status-indicator {
+  padding: 4px 12px;
+  border: 1px solid;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.status-indicator.connected {
+  border-color: #0f0;
+  color: #0f0;
+}
+
+.status-indicator.disconnected {
+  border-color: #f00;
+  color: #f00;
+}
+
+main {
+  display: grid;
+  grid-template-columns: 320px 1fr 320px;
+  grid-template-rows: 1fr 150px;
+  padding: 16px;
+  gap: 16px;
+  height: calc(100vh - 52px);
+}
+
+.panel {
+  border: 1px solid #333;
+  padding: 12px;
+  background: #0a0a0a;
+}
+
+.panel h2 {
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #888;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #222;
+  padding-bottom: 6px;
+}
+
+.left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.cmd-btn {
+  height: 28px;
+  background: #111;
+  color: #ff0;
+  border: 1px solid #555;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.cmd-btn:hover:not(:disabled) {
+  background: #1a1a1a;
+  border-color: #ff0;
+}
+
+.cmd-btn:disabled {
+  color: #333;
+  border-color: #222;
+  cursor: not-allowed;
+}

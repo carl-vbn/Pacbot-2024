@@ -1,0 +1,57 @@
+.log-controls {
+  flex: 0 0 auto;
+}
+
+.log-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.log-buttons .cmd-btn {
+  flex: 1;
+}
+
+.interval-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.interval-control label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #888;
+  flex: 1;
+}
+
+.interval-control input[type="number"] {
+  width: 60px;
+  background: #111;
+  color: #0f0;
+  border: 1px solid #333;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  outline: none;
+}
+
+.interval-control input[type="number"]:focus {
+  border-color: #0f0;
+}
+
+.interval-control input[type="number"]::-webkit-inner-spin-button,
+.interval-control input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.interval-control input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.interval-control .cmd-btn {
+  padding: 0 12px;
+}
