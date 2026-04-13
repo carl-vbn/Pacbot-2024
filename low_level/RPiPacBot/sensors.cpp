@@ -129,13 +129,23 @@ uint8_t sensorsInit() {
     return numSensorsPresent;
 }
 
+int16_t sensorOffsets[MAX_SENSORS] = {0};
+
+void sensorsSetOffset(uint8_t index, int16_t offset) {
+    if (index < MAX_SENSORS) sensorOffsets[index] = offset;
+}
+
 int16_t sensorReadMM(uint8_t index) {
     if (index >= MAX_SENSORS || !sensorPresent[index]) return -1;
 
     uint8_t range = tofSensors[index].readRangeContinuous();
 
     if (tofSensors[index].timeoutOccurred()) return -1;
-    return (int16_t)range;
+
+    int32_t corrected = (int32_t)range + (int32_t)sensorOffsets[index];
+    if (corrected < 0) corrected = 0;
+    if (corrected > INT16_MAX) corrected = INT16_MAX;
+    return (int16_t)corrected;
 }
 
 bool imuReadEuler(float &yaw, float &pitch, float &roll) {

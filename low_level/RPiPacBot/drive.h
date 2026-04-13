@@ -20,8 +20,16 @@ enum CardinalDir : uint8_t {
     DIR_WEST  = 4,
 };
 
+// PID loop identifiers for remote tuning
+#define PID_LOOP_HEADING    0
+#define PID_LOOP_CENTERING  1
+#define PID_LOOP_FORWARD    2
+
 // Initialise drive subsystem (call once from setup).
 void driveInit();
+
+// Set PID gains for a specific loop at runtime.
+void driveSetPidGains(uint8_t loop, float kp, float ki, float kd);
 
 // Switch drive mode.  When entering CARDINAL_LOCKED, currentYaw is
 // captured as the reference heading.  Switching to MANUAL stops motors.

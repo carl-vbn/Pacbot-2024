@@ -66,6 +66,25 @@ void loop() {
         driveCalibrate(yaw, leftDist, rightDist);
     }
 
+    // -- PID gain updates ------------------------------------------------
+    {
+        uint8_t pidLoop;
+        float pidKp, pidKi, pidKd;
+        if (commsPollPidGains(pidLoop, pidKp, pidKi, pidKd)) {
+            driveSetPidGains(pidLoop, pidKp, pidKi, pidKd);
+        }
+    }
+
+    // -- Sensor offset updates -------------------------------------------
+    {
+        int16_t offsets[MAX_SENSORS];
+        if (commsPollSensorOffsets(offsets)) {
+            for (uint8_t i = 0; i < MAX_SENSORS; i++) {
+                sensorsSetOffset(i, offsets[i]);
+            }
+        }
+    }
+
     // -- Motor / drive control -----------------------------------------
     // A raw motor command always drops to manual mode
     MotorState motorCmd[NUM_MOTORS];

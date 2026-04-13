@@ -20,7 +20,14 @@ void sensorsHardwareInit();
 // Returns the number of ToF sensors found.
 uint8_t sensorsInit();
 
-// Read distance from one ToF sensor (mm). Returns -1 on error/absent.
+// Per-sensor offset (mm) applied inside sensorReadMM. Default 0.
+extern int16_t sensorOffsets[MAX_SENSORS];
+
+// Set the calibration offset (mm) for a sensor slot.
+void sensorsSetOffset(uint8_t index, int16_t offset);
+
+// Read distance from one ToF sensor (mm), with per-sensor offset applied.
+// Returns -1 on error/absent.
 int16_t sensorReadMM(uint8_t index);
 
 // Read BNO055 Euler angles into yaw/pitch/roll (degrees).

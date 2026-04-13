@@ -142,6 +142,27 @@ Set the current heading as north for cardinal-locked mode.
 |--------|------|-------|-------------|
 | 0      | 1    | type  | `0x19`      |
 
+### CMD_SET_PID (0x1B) -- 14 bytes
+
+Set PID gains for a specific control loop at runtime.
+
+| Offset | Size | Field   | Description                                        |
+|--------|------|---------|----------------------------------------------------|
+| 0      | 1    | type    | `0x1B`                                             |
+| 1      | 1    | loop_id | `0`=heading `1`=centering `2`=forward              |
+| 2      | 4    | kp      | `float32` proportional gain                        |
+| 6      | 4    | ki      | `float32` integral gain                            |
+| 10     | 4    | kd      | `float32` derivative gain                          |
+
+### CMD_SET_SENSOR_OFFSETS (0x1C) -- 17 bytes
+
+Set per-sensor calibration offsets (mm). Offsets are added to raw readings inside `sensorReadMM`, so they apply to logging, centering PID, and forward PID alike.
+
+| Offset | Size | Field       | Description                                      |
+|--------|------|-------------|--------------------------------------------------|
+| 0      | 1    | type        | `0x1C`                                           |
+| 1      | 16   | offsets     | `int16[8]` per-sensor offset in mm (slot order)  |
+
 ### CMD_STOP_LOG (0x1A) -- 1 byte
 
 Stop continuous sensor logging. Returns to SETUP_DONE state.

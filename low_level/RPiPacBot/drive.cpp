@@ -6,25 +6,30 @@ static const float MIX_FWD[NUM_MOTORS]    = {  1,  0,  0, -1 };
 static const float MIX_RIGHT[NUM_MOTORS]  = {  0, -1, -1,  0 };
 static const float MIX_ROT_CW[NUM_MOTORS] = { -1, -1,  1, -1 };
 
-// -- Heading PID gains -------------------------------------------------
-static const float KP = 2.0f;
-static const float KI = 0.05f;
-static const float KD = 0.1f;
+// -- Heading PID gains (mutable for remote tuning) --------------------
+static float KP = 2.0f;
+static float KI = 0.05f;
+static float KD = 0.1f;
 static const float INTEGRAL_LIMIT = 100.0f;
 
-// -- Centering PID gains -----------------------------------------------
-static const float CENTER_KP = 1.0f;
-static const float CENTER_KI = 0.0f;
-static const float CENTER_KD = 0.2f;
+// -- Centering PID gains (mutable for remote tuning) ------------------
+static float CENTER_KP = 1.0f;
+static float CENTER_KI = 0.0f;
+static float CENTER_KD = 0.2f;
 static const float CENTER_INTEGRAL_LIMIT = 80.0f;
 
-// -- Forward distance PID ----------------------------------------------
-static const int16_t FORWARD_TARGET_MM       = 10;   // desired wall distance
-static const float   FWD_KP                  = 1.0f;
-static const float   FWD_KI                  = -0.2f;
-static const float   FWD_KD                  = 0.01f;
-static const float   FWD_INTEGRAL_LIMIT      = 80.0f;
-static const float   FWD_DERIV_ALPHA         = 0.6f;  // derivative low-pass (0-1, lower = smoother)
+// If either perpendicular (lateral) sensor reads closer than this, the
+// heading PID is suspended so only lateral centering fights the drift.
+static const int16_t HEADING_SUPPRESS_DIST_MM = 40;
+
+// -- Forward distance braking (simple two-threshold, replaces PID) ----
+// > FWD_SLOW_DIST_MM        : use commanded speed
+// [stop, FWD_SLOW_DIST_MM]  : capped at FWD_SLOW_SPEED
+// < FWD_STOP_DIST_MM        : stopped
+// Robot does NOT back off when too close.
+static const int16_t FWD_SLOW_DIST_MM = 249;  // start slowing (mm)
+static const int16_t FWD_STOP_DIST_MM = 70;   // stop (mm)
+static const uint8_t FWD_SLOW_SPEED   = 70;   // speed cap in slow zone (0-255)
 
 // -- State -------------------------------------------------------------
 static DriveMode   mode        = DRIVE_MANUAL;
@@ -45,13 +50,10 @@ static float       centerIntegral    = 0.0f;
 static float       centerLastErr     = 0.0f;
 static uint32_t    centerLastTime    = 0;
 static float       lateralCorrection = 0.0f;
+static bool        suppressHeading   = false;  // set by driveUpdateCentering when a perpendicular wall is very close
 
-// Forward distance PID
+// Forward braking output (consumed by driveUpdate)
 static float       fwdCorrection     = 0.0f;
-static float       fwdIntegral       = 0.0f;
-static float       fwdLastErr        = 0.0f;
-static float       fwdDerivFiltered  = 0.0f;
-static uint32_t    fwdLastTime       = 0;
 
 // -- Helpers -----------------------------------------------------------
 
@@ -104,6 +106,7 @@ void driveInit() {
     pidLastYaw       = 0.0f;
     pidLastTime      = 0;
     lateralCorrection = 0.0f;
+    suppressHeading  = false;
 }
 
 void driveSetMode(DriveMode m, float currentYaw) {
@@ -117,6 +120,7 @@ void driveSetMode(DriveMode m, float currentYaw) {
         curSpeed    = 0;
         lateralCorrection = 0.0f;
         fwdCorrection     = 0.0f;
+        suppressHeading   = false;
     }
     if (m == DRIVE_MANUAL) {
         motorsStop();
@@ -142,24 +146,16 @@ void driveCalibrate(float currentYaw, int16_t leftDist, int16_t rightDist) {
     centerLastTime    = 0;
     lateralCorrection = 0.0f;
     fwdCorrection     = 0.0f;
-    fwdIntegral       = 0.0f;
-    fwdLastErr        = 0.0f;
-    fwdDerivFiltered  = 0.0f;
-    fwdLastTime       = 0;
 }
 
 void driveSetCardinal(CardinalDir dir, uint8_t speed) {
     if (dir != curDir) {
-        // Axes changed — reset centering and forward PIDs
+        // Axes changed — reset centering state and forward braking
         centerIntegral    = 0.0f;
         centerLastErr     = 0.0f;
         centerLastTime    = 0;
         lateralCorrection = 0.0f;
         fwdCorrection     = 0.0f;
-        fwdIntegral       = 0.0f;
-        fwdLastErr        = 0.0f;
-        fwdDerivFiltered  = 0.0f;
-        fwdLastTime       = 0;
     }
     curDir   = dir;
     curSpeed = speed;
@@ -194,27 +190,18 @@ bool driveGetLateralSensors(uint8_t &leftIdx, uint8_t &rightIdx) {
 }
 
 void driveUpdateForward(int16_t forwardDist) {
-    if (forwardDist < 0) return;           // sensor error — keep last value
+    if (forwardDist < 0) return;  // sensor error — keep last value
 
-    // Positive error → too far from wall → move forward
-    // Negative error → too close          → back off
-    float error = (float)(forwardDist - FORWARD_TARGET_MM);
-
-    uint32_t now = millis();
-    float dt = (fwdLastTime == 0) ? 0.05f : (now - fwdLastTime) / 1000.0f;
-    if (dt < 0.001f) dt = 0.001f;
-    fwdLastTime = now;
-
-    fwdIntegral += error * dt;
-    fwdIntegral  = constrain(fwdIntegral, -FWD_INTEGRAL_LIMIT, FWD_INTEGRAL_LIMIT);
-
-    float rawDeriv = (error - fwdLastErr) / dt;
-    fwdLastErr     = error;
-
-    // Low-pass filter on derivative to suppress sensor noise
-    fwdDerivFiltered += FWD_DERIV_ALPHA * (rawDeriv - fwdDerivFiltered);
-
-    fwdCorrection = FWD_KP * error + FWD_KI * fwdIntegral + FWD_KD * fwdDerivFiltered;
+    if (forwardDist <= FWD_STOP_DIST_MM) {
+        fwdCorrection = 0.0f;
+    } else if (forwardDist <= FWD_SLOW_DIST_MM) {
+        // In slow zone: cap at FWD_SLOW_SPEED (driveUpdate's constrain
+        // further clamps to curSpeed, so this never speeds up the robot).
+        fwdCorrection = (float)FWD_SLOW_SPEED;
+    } else {
+        // Clear ahead — use commanded speed
+        fwdCorrection = (float)curSpeed;
+    }
 }
 
 bool driveUpdate(float currentYaw) {
@@ -228,9 +215,6 @@ bool driveUpdate(float currentYaw) {
 
     float err = wrapAngle(refYaw - currentYaw);
 
-    pidIntegral += err * dt;
-    pidIntegral  = constrain(pidIntegral, -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
-
     // Derivative on measurement (not error) to avoid kick on sudden
     // disturbances like wall collisions.  Negate because increasing yaw
     // means decreasing error.
@@ -238,8 +222,15 @@ bool driveUpdate(float currentYaw) {
     float deriv = -yawDelta / dt;
     pidLastYaw  = currentYaw;
 
-    float headingCorr = KP * err + KI * pidIntegral + KD * deriv;
-    headingCorr = constrain(headingCorr, -255.0f, 255.0f);
+    // When a perpendicular wall is very close, hand off entirely to the
+    // lateral centering loop — no heading correction, no integral windup.
+    float headingCorr = 0.0f;
+    if (!suppressHeading) {
+        pidIntegral += err * dt;
+        pidIntegral  = constrain(pidIntegral, -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
+        headingCorr = KP * err + KI * pidIntegral + KD * deriv;
+        headingCorr = constrain(headingCorr, -255.0f, 255.0f);
+    }
 
     // -- Base movement vector ------------------------------------------
     float fwd = 0.0f, right = 0.0f;
@@ -277,14 +268,25 @@ bool driveUpdate(float currentYaw) {
 }
 
 void driveUpdateCentering(int16_t leftDist, int16_t rightDist) {
-    if (!calibrated || curDir == DIR_STOP) {
+    if (curDir == DIR_STOP) {
         lateralCorrection = 0.0f;
+        suppressHeading   = false;
         return;
     }
 
     // A reading above 100 means no wall nearby — treat as floating.
     bool leftValid  = leftDist  >= 0 && leftDist  <= 100;
     bool rightValid = rightDist >= 0 && rightDist <= 100;
+
+    // Suppress heading PID if a perpendicular wall is within
+    // HEADING_SUPPRESS_DIST_MM — let centering alone handle the drift.
+    suppressHeading = (leftValid  && leftDist  <= HEADING_SUPPRESS_DIST_MM) ||
+                      (rightValid && rightDist <= HEADING_SUPPRESS_DIST_MM);
+
+    if (!calibrated) {
+        lateralCorrection = 0.0f;
+        return;
+    }
 
     if (!leftValid && !rightValid) return;
 
@@ -318,4 +320,22 @@ void driveUpdateCentering(int16_t leftDist, int16_t rightDist) {
     float correction = -(CENTER_KP * error + CENTER_KI * centerIntegral
                          + CENTER_KD * deriv);
     lateralCorrection = constrain(correction, -255.0f, 255.0f);
+}
+
+void driveSetPidGains(uint8_t loop, float kp, float ki, float kd) {
+    switch (loop) {
+        case PID_LOOP_HEADING:
+            KP = kp; KI = ki; KD = kd;
+            break;
+        case PID_LOOP_CENTERING:
+            CENTER_KP = kp; CENTER_KI = ki; CENTER_KD = kd;
+            break;
+        case PID_LOOP_FORWARD:
+            // Forward braking no longer uses PID — see driveUpdateForward,
+            // which uses simple distance thresholds instead. The UI dials
+            // are kept in case PID is reintroduced later; for now the
+            // gains are silently ignored.
+            (void)kp; (void)ki; (void)kd;
+            break;
+    }
 }

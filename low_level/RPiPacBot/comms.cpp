@@ -148,6 +148,40 @@ static void handleRx() {
                 break;
             }
 
+            case CMD_SET_PID: {
+                if (n >= 14) {
+                    uint8_t loop = rxBuf[1];
+                    float kp, ki, kd;
+                    memcpy(&kp, rxBuf + 2, 4);
+                    memcpy(&ki, rxBuf + 6, 4);
+                    memcpy(&kd, rxBuf + 10, 4);
+                    if (loop <= PID_LOOP_FORWARD) {
+                        mutex_enter_blocking(&commsSharedMutex);
+                        commsShared.pendingPidLoop = loop;
+                        commsShared.pendingPidKp   = kp;
+                        commsShared.pendingPidKi   = ki;
+                        commsShared.pendingPidKd   = kd;
+                        commsShared.pidGainsPending = true;
+                        mutex_exit(&commsSharedMutex);
+                    }
+                }
+                break;
+            }
+
+            case CMD_SET_SENSOR_OFFSETS: {
+                if (n >= 1 + MAX_SENSORS * 2) {
+                    mutex_enter_blocking(&commsSharedMutex);
+                    for (uint8_t i = 0; i < MAX_SENSORS; i++) {
+                        int16_t off;
+                        memcpy(&off, rxBuf + 1 + i * 2, 2);
+                        commsShared.pendingSensorOffsets[i] = off;
+                    }
+                    commsShared.sensorOffsetsPending = true;
+                    mutex_exit(&commsSharedMutex);
+                }
+                break;
+            }
+
             case CMD_PING: {
                 uint8_t len = buildPong(txBuf, millis());
                 sendPacket(txBuf, len);
@@ -264,6 +298,32 @@ bool commsPollCalibrate() {
     mutex_enter_blocking(&commsSharedMutex);
     bool pending = commsShared.calibratePending;
     if (pending) commsShared.calibratePending = false;
+    mutex_exit(&commsSharedMutex);
+    return pending;
+}
+
+bool commsPollPidGains(uint8_t &loop, float &kp, float &ki, float &kd) {
+    mutex_enter_blocking(&commsSharedMutex);
+    bool pending = commsShared.pidGainsPending;
+    if (pending) {
+        loop = commsShared.pendingPidLoop;
+        kp   = commsShared.pendingPidKp;
+        ki   = commsShared.pendingPidKi;
+        kd   = commsShared.pendingPidKd;
+        commsShared.pidGainsPending = false;
+    }
+    mutex_exit(&commsSharedMutex);
+    return pending;
+}
+
+bool commsPollSensorOffsets(int16_t offsets[MAX_SENSORS]) {
+    mutex_enter_blocking(&commsSharedMutex);
+    bool pending = commsShared.sensorOffsetsPending;
+    if (pending) {
+        memcpy(offsets, commsShared.pendingSensorOffsets,
+               sizeof(int16_t) * MAX_SENSORS);
+        commsShared.sensorOffsetsPending = false;
+    }
     mutex_exit(&commsSharedMutex);
     return pending;
 }

@@ -25,6 +25,8 @@
 #define CMD_SET_DRIVE_MODE  0x17
 #define CMD_CARDINAL_MOVE   0x18
 #define CMD_CALIBRATE       0x19
+#define CMD_SET_PID         0x1B
+#define CMD_SET_SENSOR_OFFSETS 0x1C
 
 // -- Log severity levels -----------------------------------------------
 #define LOG_DEBUG   0

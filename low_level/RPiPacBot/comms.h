@@ -48,6 +48,15 @@ struct SharedData {
 
     bool        calibratePending;
 
+    // PID gains command (written by core 1, read by core 0)
+    uint8_t     pendingPidLoop;
+    float       pendingPidKp, pendingPidKi, pendingPidKd;
+    bool        pidGainsPending;
+
+    // Per-sensor offset command (written by core 1, read by core 0)
+    int16_t     pendingSensorOffsets[MAX_SENSORS];
+    bool        sensorOffsetsPending;
+
     // Set by core 0 after commsSetDeviceInfo(); core 1 waits for this
     // before sending DEVICE_INFO to the server.
     bool     deviceInfoReady;
@@ -79,6 +88,12 @@ bool commsPollCardinalCmd(CardinalDir &dir, uint8_t &speed);
 
 // Check if a calibrate was requested. Returns true once, then clears.
 bool commsPollCalibrate();
+
+// Check if PID gains were set. Returns true once, then clears.
+bool commsPollPidGains(uint8_t &loop, float &kp, float &ki, float &kd);
+
+// Check if sensor offsets were set. Returns true once, then clears.
+bool commsPollSensorOffsets(int16_t offsets[MAX_SENSORS]);
 
 // Read current robot state (lock-free volatile read).
 RobotState commsGetState();
