@@ -135,7 +135,7 @@ void driveCalibrate(float currentYaw, int16_t leftDist, int16_t rightDist) {
 
     // Reset both PIDs
     pidIntegral       = 0.0f;
-    pidLastYaw        = 0.0f;
+    pidLastYaw        = currentYaw;
     pidLastTime       = millis();
     centerIntegral    = 0.0f;
     centerLastErr     = 0.0f;
