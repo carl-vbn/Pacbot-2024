@@ -7,7 +7,7 @@ Byte order is **little-endian** (native to RP2350 and x86).
 
 ### ALIVE (0x01) -- 5 bytes
 
-Sent every second while waiting for the setup command.
+Sent every second while idle (before sensor init completes).
 
 | Offset | Size | Field      | Description              |
 |--------|------|------------|--------------------------|
@@ -60,17 +60,9 @@ Response to a PING from the server.
 
 ## Server -> Pi
 
-### CMD_SETUP (0x10) -- 1 byte
-
-Instructs the Pi to initialise sensors. Only valid in IDLE state.
-
-| Offset | Size | Field | Description |
-|--------|------|-------|-------------|
-| 0      | 1    | type  | `0x10`      |
-
 ### CMD_START_LOG (0x11) -- 1 byte
 
-Begin continuous sensor logging. Only valid after setup is complete.
+Begin continuous sensor logging. Only valid after setup is complete (SETUP_DONE).
 
 | Offset | Size | Field | Description |
 |--------|------|-------|-------------|
@@ -107,9 +99,9 @@ Change the sensor data send rate. Minimum 10 ms.
 | 0      | 1    | type        | `0x13`                         |
 | 1      | 2    | interval_ms | `uint16` new send interval ms  |
 
-### CMD_RESCAN_SENSORS (0x16) -- 1 byte
+### CMD_STATUS (0x16) -- 1 byte
 
-Re-initialise all ToF sensors and the IMU at runtime. Accepted in SETUP_DONE and LOGGING states. The Pi will power-cycle all sensor CE lines, re-run the init sequence, and send a fresh DEVICE_INFO with the updated sensor mask.
+Request device info. The Pi responds with a fresh DEVICE_INFO message.
 
 | Offset | Size | Field | Description |
 |--------|------|-------|-------------|
@@ -123,17 +115,52 @@ Latency probe. Pi responds with PONG.
 |--------|------|-------|-------------|
 | 0      | 1    | type  | `0x14`      |
 
+### CMD_SET_DRIVE_MODE (0x17) -- 2 bytes
+
+Switch between manual and cardinal-locked drive modes.
+
+| Offset | Size | Field | Description                                  |
+|--------|------|-------|----------------------------------------------|
+| 0      | 1    | type  | `0x17`                                       |
+| 1      | 1    | mode  | `0` = manual, `1` = cardinal locked           |
+
+### CMD_CARDINAL_MOVE (0x18) -- 3 bytes
+
+Move in a cardinal direction (cardinal-locked mode). Accepted in SETUP_DONE and LOGGING states.
+
+| Offset | Size | Field     | Description                                       |
+|--------|------|-----------|---------------------------------------------------|
+| 0      | 1    | type      | `0x18`                                            |
+| 1      | 1    | direction | `0`=stop `1`=north `2`=east `3`=south `4`=west    |
+| 2      | 1    | speed     | `uint8` speed 0-255                                |
+
+### CMD_CALIBRATE (0x19) -- 1 byte
+
+Set the current heading as north for cardinal-locked mode.
+
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0      | 1    | type  | `0x19`      |
+
+### CMD_STOP_LOG (0x1A) -- 1 byte
+
+Stop continuous sensor logging. Returns to SETUP_DONE state.
+
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0      | 1    | type  | `0x1A`      |
+
 ## State Machine
 
 ```
-  IDLE  --[CMD_SETUP]--> SETUP_REQ --[init done]--> SETUP_DONE --[CMD_START_LOG]--> LOGGING
-   |                                                     |
-   | (alive heartbeats)                    (device_info sent)
+  IDLE --[init done]--> SETUP_DONE --[CMD_START_LOG]--> LOGGING
+   |                        ^                             |
+   | (alive heartbeats)     |                             |
+                            +-------[CMD_STOP_LOG]--------+
 ```
 
-- **IDLE**: Pi sends ALIVE every second. Server should send CMD_SETUP when ready.
-- **SETUP_REQ**: Core 0 runs sensor/IMU init. No packets sent.
-- **SETUP_DONE**: Pi sends DEVICE_INFO once. Server should send CMD_START_LOG.
-- **LOGGING**: Pi sends SENSOR_DATA at the configured interval.
+- **IDLE**: Pi sends ALIVE every second while sensors initialise.
+- **SETUP_DONE**: Pi sends DEVICE_INFO once. Server may send CMD_START_LOG.
+- **LOGGING**: Pi sends SENSOR_DATA at the configured interval. CMD_STOP_LOG returns to SETUP_DONE.
 
-Motor commands (CMD_SET_MOTOR, CMD_SET_MOTORS) and pings (CMD_PING) are accepted after setup completes (SETUP_DONE and LOGGING).
+Motor commands (CMD_SET_MOTOR, CMD_SET_MOTORS), drive mode (CMD_SET_DRIVE_MODE), cardinal movement (CMD_CARDINAL_MOVE), calibration (CMD_CALIBRATE), status (CMD_STATUS), and pings (CMD_PING) are accepted in SETUP_DONE and LOGGING states.
