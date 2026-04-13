@@ -229,7 +229,7 @@ bool driveUpdate(float currentYaw) {
         pidIntegral += err * dt;
         pidIntegral  = constrain(pidIntegral, -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
         headingCorr = KP * err + KI * pidIntegral + KD * deriv;
-        headingCorr = constrain(headingCorr, -255.0f, 255.0f);
+        headingCorr = constrain(headingCorr, -50.0f, 50.0f);
     }
 
     // -- Base movement vector ------------------------------------------
