@@ -9,7 +9,7 @@
 #define WIFI_PASSWORD "anvk6007"
 
 // -- Server (the PC running test_server.py) ----------------------------
-#define SERVER_IP     "172.19.126.239"
+#define SERVER_IP     "10.35.122.239"
 #define SERVER_PORT   9000
 
 // -- Timing ------------------------------------------------------------

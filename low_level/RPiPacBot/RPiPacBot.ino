@@ -40,7 +40,7 @@ void setup() {
 }
 
 #define DRIVE_UPDATE_MS  10   // heading PID rate (~100 Hz)
-#define CENTER_UPDATE_MS 50   // centering PID rate (~20 Hz)
+#define CENTER_UPDATE_MS 100   // centering PID rate (~20 Hz)
 
 void loop() {
     static uint32_t lastRead   = 0;

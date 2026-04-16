@@ -27,9 +27,10 @@ static const int16_t HEADING_SUPPRESS_DIST_MM = 40;
 // [stop, FWD_SLOW_DIST_MM]  : capped at FWD_SLOW_SPEED
 // < FWD_STOP_DIST_MM        : stopped
 // Robot does NOT back off when too close.
-static const int16_t FWD_SLOW_DIST_MM = 249;  // start slowing (mm)
+static const int16_t FWD_SLOW_DIST_MM = 190;  // start slowing (mm)
 static const int16_t FWD_STOP_DIST_MM = 70;   // stop (mm)
-static const uint8_t FWD_SLOW_SPEED   = 70;   // speed cap in slow zone (0-255)
+static const uint8_t FWD_SLOW_SPEED   = 40;   // speed cap in slow zone (0-255)
+static const float   FWD_ACCEL_RATE   = 500.0f;  // speed-units per second
 
 // -- State -------------------------------------------------------------
 static DriveMode   mode        = DRIVE_MANUAL;
@@ -54,6 +55,7 @@ static bool        suppressHeading   = false;  // set by driveUpdateCentering wh
 
 // Forward braking output (consumed by driveUpdate)
 static float       fwdCorrection     = 0.0f;
+static uint32_t    fwdLastTime       = 0;
 
 // -- Helpers -----------------------------------------------------------
 
@@ -120,6 +122,7 @@ void driveSetMode(DriveMode m, float currentYaw) {
         curSpeed    = 0;
         lateralCorrection = 0.0f;
         fwdCorrection     = 0.0f;
+        fwdLastTime       = 0;
         suppressHeading   = false;
     }
     if (m == DRIVE_MANUAL) {
@@ -146,6 +149,7 @@ void driveCalibrate(float currentYaw, int16_t leftDist, int16_t rightDist) {
     centerLastTime    = 0;
     lateralCorrection = 0.0f;
     fwdCorrection     = 0.0f;
+    fwdLastTime       = 0;
 }
 
 void driveSetCardinal(CardinalDir dir, uint8_t speed) {
@@ -156,6 +160,7 @@ void driveSetCardinal(CardinalDir dir, uint8_t speed) {
         centerLastTime    = 0;
         lateralCorrection = 0.0f;
         fwdCorrection     = 0.0f;
+        fwdLastTime       = 0;
     }
     curDir   = dir;
     curSpeed = speed;
@@ -192,16 +197,28 @@ bool driveGetLateralSensors(uint8_t &leftIdx, uint8_t &rightIdx) {
 void driveUpdateForward(int16_t forwardDist) {
     if (forwardDist < 0) return;  // sensor error — keep last value
 
+    float target;
     if (forwardDist <= FWD_STOP_DIST_MM) {
-        fwdCorrection = 0.0f;
+        target = 0.0f;
     } else if (forwardDist <= FWD_SLOW_DIST_MM) {
         // In slow zone: cap at FWD_SLOW_SPEED (driveUpdate's constrain
         // further clamps to curSpeed, so this never speeds up the robot).
-        fwdCorrection = (float)FWD_SLOW_SPEED;
+        target = (float)FWD_SLOW_SPEED;
     } else {
         // Clear ahead — use commanded speed
-        fwdCorrection = (float)curSpeed;
+        target = (float)curSpeed;
     }
+
+    uint32_t now = millis();
+    float dt = (fwdLastTime == 0) ? 0.05f : (now - fwdLastTime) / 1000.0f;
+    if (dt < 0.001f) dt = 0.001f;
+    fwdLastTime = now;
+
+    float maxStep = FWD_ACCEL_RATE * dt;
+    float delta   = target - fwdCorrection;
+    if (delta >  maxStep) delta =  maxStep;
+    if (delta < -maxStep) delta = -maxStep;
+    fwdCorrection += delta;
 }
 
 bool driveUpdate(float currentYaw) {
@@ -246,7 +263,7 @@ bool driveUpdate(float currentYaw) {
     float latMix[NUM_MOTORS];
     getLateralMix(latMix);
 
-    // -- Forward speed: PID-controlled, clamped to ±curSpeed -------------
+    // -- Forward speed: (no longer) PID-controlled, clamped to ±curSpeed -------------
     float effectiveSpeed = constrain(fwdCorrection,
                                      -(float)curSpeed, (float)curSpeed);
     float speedFrac = curSpeed / 255.0f;
