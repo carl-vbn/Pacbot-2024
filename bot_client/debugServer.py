@@ -22,7 +22,7 @@ class DebugServer:
         self.on_cell_clicked = lambda row, col: None
         self.is_resetting = False
 
-    async def handler(self, websocket, path):
+    async def handler(self, websocket):
         print(f"[DEBUG SERVER] Client connected: {websocket.remote_address}")
         self.clients.append(websocket)
 
