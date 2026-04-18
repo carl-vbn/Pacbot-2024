@@ -46,10 +46,10 @@ async def unstuck(state, stuck_pos: tuple) -> None:
     Send all four directions in quick succession to try to free the robot if it's stuck.
     Exits early if pacbot moves away from stuck_pos.
     '''
-    print(f"UNSTUCK triggered at {stuck_pos}")
+    print(f"[Low level] UNSTUCK triggered at {stuck_pos}")
     for direction in [Directions.UP, Directions.DOWN, Directions.RIGHT, Directions.LEFT, Directions.NONE]:
         if (state.pacmanLoc.row, state.pacmanLoc.col) != stuck_pos:
-            print("Pacbot moved, exiting unstuck")
+            print("[Low level] Pacbot moved, exiting unstuck")
             break
         send_direction(direction)
         await asyncio.sleep(0.2)

@@ -179,35 +179,28 @@ class DQNDecisionModule:
         pr, pc = self.state.pacmanLoc.row, self.state.pacmanLoc.col
         return abs(pr - dr) + abs(pc - dc) <= self.SUPER_PELLET_CHASE_RADIUS
 
-    def _astar_targeting_frightened_ghost(self) -> bool:
-        """Return True if A*'s current destination matches a live frightened ghost's position."""
-        dest = getattr(self._astar, 'destination', None)
-        if dest is None:
-            return False
-        dr, dc = dest
-        for ghost in self.state.ghosts:
-            if ghost.isFrightened() and ghost.location.row == dr and ghost.location.col == dc:
-                return True
-        return False
+    def _any_ghost_frightened(self) -> bool:
+        return any(ghost.isFrightened() for ghost in self.state.ghosts)
 
     # ------------------------------------------------------------------
     # Inference
     # ------------------------------------------------------------------
 
     def get_direction(self) -> Directions:
-        stay_in_astar = self._using_astar and (
-            self._astar_targeting_nearby_super_pellet() or
-            self._astar_targeting_frightened_ghost()
-        )
-        if self.hybrid_mode and (self._ghost_within_radius() or stay_in_astar):
+        any_frightened = self._any_ghost_frightened()
+        stay_in_astar = self._using_astar and self._astar_targeting_nearby_super_pellet()
+        if self.hybrid_mode and (self._ghost_within_radius() or any_frightened or stay_in_astar):
             if not self._using_astar:
                 self._using_astar = True
-                print('[DQN] Hybrid: switching to A* (ghost nearby)')
+                if any_frightened:
+                    print('[DQN] Hybrid: switching to A* (super pellet eaten, ghosts frightened)')
+                else:
+                    print('[DQN] Hybrid: switching to A* (ghost nearby)')
             return self._astar.get_direction()
 
         if self.hybrid_mode and self._using_astar:
             self._using_astar = False
-            print('[DQN] Hybrid: switching to RL (ghost far, no super pellet or frightened ghost target)')
+            print('[DQN] Hybrid: switching to RL (no frightened ghosts, ghost far)')
             DebugServer.instance.reset_cell_colors()
 
         obs = self._build_obs()
