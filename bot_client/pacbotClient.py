@@ -180,7 +180,8 @@ class PacbotClient:
 						if args.output:
 							with open(args.output, 'w') as f:
 								f.write(str(self.scores))
-						await debug_server.reset_game()
+						if not args.competition_mode:
+							await debug_server.reset_game()
 						await debug_server.pause_game()
 						await self.disconnect()
 						sys.exit(0)
@@ -191,7 +192,8 @@ class PacbotClient:
 							await asyncio.sleep(args.delay / 1000)
 						self.state.currLives = 3
 						self.state.currLevel = 1
-						await debug_server.reset_game()
+						if not args.competition_mode:
+							await debug_server.reset_game()
 				elif should_resume:
 					await debug_server.resume_game()
 
