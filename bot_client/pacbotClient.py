@@ -74,7 +74,7 @@ class PacbotClient:
 		self.connection: ClientConnection
 
 		# Game state object to store the game information
-		self.state: GameState = GameState(False if args.games == 1 else True)
+		self.state: GameState = GameState(False if (args.games == 1 or args.competition_mode) else True)
 
 		# Decision module (policy) to make high-level decisions
 		if args.strategy == 'dqn':
