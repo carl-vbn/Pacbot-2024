@@ -196,8 +196,13 @@ class DecisionModule:
 
 		while self.state.isConnected():
 			if low_level.connected:
+				# Physical robot: at most one move per server tick
 				await asyncio.sleep(0)
+				if self.state.currTicks == last_ticks:
+					continue
+				last_ticks = self.state.currTicks
 			else:
+				# Simulation: 3 pacbot moves per 2 ghost moves = 1 move per 1/3 s
 				await asyncio.sleep(1 / 3)
 				last_ticks = self.state.currTicks
 
@@ -223,9 +228,6 @@ class DecisionModule:
 			if direction != last_direction:
 				send_direction(direction)
 				last_direction = direction
-
-			if low_level.connected and direction != Directions.NONE:
-				await asyncio.sleep(0.2)
 
 """
 ================================================.
