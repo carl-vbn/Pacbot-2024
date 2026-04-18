@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from gameState import GameState, GameModes, Directions
+from debugServer import DebugServer
 from time import time
 import low_level
 from low_level import send_direction, unstuck
@@ -178,13 +179,27 @@ class DQNDecisionModule:
         pr, pc = self.state.pacmanLoc.row, self.state.pacmanLoc.col
         return abs(pr - dr) + abs(pc - dc) <= self.SUPER_PELLET_CHASE_RADIUS
 
+    def _astar_targeting_frightened_ghost(self) -> bool:
+        """Return True if A*'s current destination matches a live frightened ghost's position."""
+        dest = getattr(self._astar, 'destination', None)
+        if dest is None:
+            return False
+        dr, dc = dest
+        for ghost in self.state.ghosts:
+            if ghost.isFrightened() and ghost.location.row == dr and ghost.location.col == dc:
+                return True
+        return False
+
     # ------------------------------------------------------------------
     # Inference
     # ------------------------------------------------------------------
 
     def get_direction(self) -> Directions:
-        if self.hybrid_mode and (self._ghost_within_radius() or
-                                  (self._using_astar and self._astar_targeting_nearby_super_pellet())):
+        stay_in_astar = self._using_astar and (
+            self._astar_targeting_nearby_super_pellet() or
+            self._astar_targeting_frightened_ghost()
+        )
+        if self.hybrid_mode and (self._ghost_within_radius() or stay_in_astar):
             if not self._using_astar:
                 self._using_astar = True
                 print('[DQN] Hybrid: switching to A* (ghost nearby)')
@@ -192,7 +207,8 @@ class DQNDecisionModule:
 
         if self.hybrid_mode and self._using_astar:
             self._using_astar = False
-            print('[DQN] Hybrid: switching to RL (ghost far, no nearby super pellet target)')
+            print('[DQN] Hybrid: switching to RL (ghost far, no super pellet or frightened ghost target)')
+            DebugServer.instance.reset_cell_colors()
 
         obs = self._build_obs()
         mask = self._get_action_mask()
@@ -205,6 +221,10 @@ class DQNDecisionModule:
         # Record ghost positions for the next step's last-position channels
         for i, ghost in enumerate(self.state.ghosts):
             self._last_ghost_pos[i] = (ghost.location.row, ghost.location.col)
+
+        if self.hybrid_mode:
+            self._astar.avoidance_map.updateMap(self.state)
+            self._astar.avoidance_map.show_map()
 
         return _ACTION_TO_DIR[action]
 
