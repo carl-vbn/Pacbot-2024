@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/binary"
 	"encoding/json"
 	"flag"
@@ -9,6 +10,8 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -98,6 +101,12 @@ type server struct {
 	// runs with the UI's currently selected coefficients.
 	pidMu    sync.Mutex
 	pidGains [3]pidState
+
+	// Speed used by the IPC interface, which only carries direction.
+	// Tracks the most recent non-zero speed seen on a cardinal_move from
+	// the webapp so the UI slider still governs external commands.
+	speedMu           sync.Mutex
+	lastCardinalSpeed int
 }
 
 func newServer() *server {
@@ -110,6 +119,7 @@ func newServer() *server {
 	s.robot.state = "disconnected"
 	s.robot.sensorMask = 0x0F // default: 4 sensors (slots 0-3)
 	s.robot.numMotors = 4
+	s.lastCardinalSpeed = 128
 	for i := range s.robot.sensors {
 		s.robot.sensors[i] = -1
 	}
@@ -488,6 +498,11 @@ func (s *server) handleWSCommand(msg map[string]any) {
 			return
 		}
 		log.Printf("-> CMD_CARDINAL_MOVE dir=%d speed=%d", int(dir), int(spd))
+		if byte(dir) != 0 && byte(spd) != 0 {
+			s.speedMu.Lock()
+			s.lastCardinalSpeed = int(byte(spd))
+			s.speedMu.Unlock()
+		}
 
 	case "calibrate":
 		if err := s.sendToRobot([]byte{CmdCalibrate}); err != nil {
@@ -576,6 +591,107 @@ func (s *server) udpListener() {
 	}
 }
 
+// handleExternalDirection processes a single-character cardinal command
+// arriving from the local IPC socket. Valid inputs are n/e/s/w (cardinal
+// moves) and x (stop). Forwards the move to the robot and broadcasts the
+// direction so the webapp can mirror the highlight.
+func (s *server) handleExternalDirection(c byte) error {
+	var dirCode byte
+	var uiDir any
+	switch c {
+	case 'n':
+		dirCode, uiDir = 1, "forward"
+	case 'e':
+		dirCode, uiDir = 2, "right"
+	case 's':
+		dirCode, uiDir = 3, "backward"
+	case 'w':
+		dirCode, uiDir = 4, "left"
+	case 'x':
+		dirCode, uiDir = 0, nil
+	default:
+		return fmt.Errorf("invalid direction %q (expected n/e/s/w/x)", string(c))
+	}
+
+	s.speedMu.Lock()
+	speed := s.lastCardinalSpeed
+	s.speedMu.Unlock()
+	if dirCode == 0 {
+		speed = 0
+	}
+
+	label := "stop"
+	if uiDir != nil {
+		label = uiDir.(string)
+	}
+
+	payload := []byte{CmdCardinalMove, dirCode, byte(speed)}
+	sendErr := s.sendToRobot(payload)
+
+	suffix := ""
+	if sendErr != nil {
+		suffix = fmt.Sprintf(" (not forwarded: %v)", sendErr)
+	}
+	log.Printf("-> (IPC) CMD_CARDINAL_MOVE dir=%s speed=%d%s", label, speed, suffix)
+	s.broadcastJSON(map[string]any{
+		"type":     "log",
+		"severity": "INFO",
+		"text":     fmt.Sprintf("[IPC] direction=%s speed=%d%s", label, speed, suffix),
+	})
+	s.broadcastJSON(map[string]any{
+		"type":      "external_direction",
+		"direction": uiDir,
+	})
+	return sendErr
+}
+
+func (s *server) handleIPCConn(conn net.Conn) {
+	defer conn.Close()
+	scanner := bufio.NewScanner(conn)
+	for scanner.Scan() {
+		line := strings.TrimSpace(strings.ToLower(scanner.Text()))
+		if line == "" {
+			continue
+		}
+		if len(line) != 1 {
+			log.Printf("IPC: ignoring %q (expected single char n/e/s/w/x)", line)
+			continue
+		}
+		if err := s.handleExternalDirection(line[0]); err != nil {
+			log.Printf("IPC: %v", err)
+		}
+	}
+}
+
+func (s *server) ipcListener(path string) {
+	// Remove any stale socket file left by a previous crash so we can bind.
+	if _, err := os.Stat(path); err == nil {
+		if err := os.Remove(path); err != nil {
+			log.Printf("Failed to remove stale IPC socket %s: %v", path, err)
+			return
+		}
+	}
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		log.Printf("Failed to listen on IPC socket %s: %v", path, err)
+		return
+	}
+	defer listener.Close()
+	if err := os.Chmod(path, 0666); err != nil {
+		log.Printf("Failed to chmod IPC socket: %v", err)
+	}
+	log.Printf("IPC socket listening on %s", path)
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Printf("IPC accept error: %v", err)
+			continue
+		}
+		go s.handleIPCConn(conn)
+	}
+}
+
 func (s *server) disconnectWatcher() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -653,6 +769,7 @@ func main() {
 	udpPort := flag.Int("udp-port", 9000, "UDP port for robot communication")
 	httpPort := flag.Int("http-port", 8765, "HTTP/WebSocket port for dashboard")
 	staticDir := flag.String("static", "../webapp/dist", "Static files directory")
+	ipcSocket := flag.String("ipc-socket", "/tmp/pacbot.sock", "Unix domain socket for local IPC direction commands")
 	flag.Parse()
 
 	srv := newServer()
@@ -669,6 +786,7 @@ func main() {
 
 	go srv.udpListener()
 	go srv.disconnectWatcher()
+	go srv.ipcListener(*ipcSocket)
 
 	http.HandleFunc("/ws", srv.handleWS)
 	http.Handle("/", http.FileServer(http.Dir(*staticDir)))
@@ -677,6 +795,7 @@ func main() {
 	log.Printf("  Robot UDP port: %d", *udpPort)
 	log.Printf("  Dashboard HTTP: http://localhost:%d", *httpPort)
 	log.Printf("  Static files:   %s", *staticDir)
+	log.Printf("  IPC socket:     %s", *ipcSocket)
 
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", *httpPort), nil); err != nil {
 		log.Fatalf("HTTP server error: %v", err)

@@ -60,8 +60,8 @@ void loop() {
         float yaw = 0, pitch = 0, roll = 0;
         imuReadEuler(yaw, pitch, roll);
 
-        int16_t leftDist  = sensorReadMM(SENSOR_IDX_WEST);
-        int16_t rightDist = sensorReadMM(SENSOR_IDX_EAST);
+        int16_t leftDist  = sensorReadMM(SENSOR_IDX_NORTH);
+        int16_t rightDist = sensorReadMM(SENSOR_IDX_SOUTH);
 
         driveCalibrate(yaw, leftDist, rightDist);
     }

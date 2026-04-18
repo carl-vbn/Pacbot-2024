@@ -5,11 +5,11 @@
 // =====================================================================
 
 // -- WiFi credentials --------------------------------------------------
-#define WIFI_SSID     "Galaxy S22 Ultra"
-#define WIFI_PASSWORD "anvk6007"
+#define WIFI_SSID     "MdrcPacbot"
+#define WIFI_PASSWORD ""
 
 // -- Server (the PC running test_server.py) ----------------------------
-#define SERVER_IP     "10.35.122.239"
+#define SERVER_IP     "192.168.8.229"
 #define SERVER_PORT   9000
 
 // -- Timing ------------------------------------------------------------
