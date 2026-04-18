@@ -156,6 +156,8 @@ class DQNDecisionModule:
     def _ghost_within_radius(self) -> bool:
         pr, pc = self.state.pacmanLoc.row, self.state.pacmanLoc.col
         for ghost in self.state.ghosts:
+            if ghost.isFrightened():
+                continue
             gr, gc = ghost.location.row, ghost.location.col
             if abs(pr - gr) + abs(pc - gc) <= HYBRID_GHOST_RADIUS:
                 return True
