@@ -8,7 +8,7 @@
 #define ROTATIONAL_CORRECTION_SPEED 80
 
 // PID Tuning
-#define Kp 3.0      // start here; tune on your robot
+#define Kp 2.8      // start here; tune on your robot
 #define Ki 0.1     // small integral to remove steady-state bias
 #define Kd 0.2      // derivative to dampen oscillation
 
@@ -140,17 +140,45 @@ void movement_tick(long delta_time, int gpioVal) {
     }
   }
 
-  // Lateral correction
+  // Lateral correction PID (thanks gpt)
+  // PID gains - you’ll want to tune these
+  const float Kp_lat = 1.3f;
+  const float Ki_lat = 0.0f;   // start with 0, increase slowly
+  const float Kd_lat = 0.3f;   // start with small value when you tune
+
+  // PID state
+  float lateralIntegral   = 0.0f;
+  float lateralPrevError  = 0.0f;
+  unsigned long lateralLastTime = 0;
+
   if (!lateralVoid) {
-    int correctionSpeed = abs(distanceDelta) * 1.5;
+    // error: we want distanceDelta -> 0
+    float error = (float)distanceDelta;
 
-    if (correctionSpeed > 70) {
-      correctionSpeed = 70;
-    }
+    // compute dt (in seconds)
+    unsigned long now = millis();
+    float dt = (now - lateralLastTime) / 1000.0f;
+    if (dt <= 0) dt = 0.001f; // safety to avoid division by zero
 
-    lateralSpeed = distanceDelta > 0 ? correctionSpeed : -correctionSpeed;
+    // PID terms
+    lateralIntegral += error * dt;
+    float derivative = (error - lateralPrevError) / dt;
+
+    float output = Kp_lat * error
+                + Ki_lat * lateralIntegral
+                + Kd_lat * derivative;
+
+    // clamp output to your speed limits
+    if (output > 70)  output = 70;
+    if (output < -70) output = -70;
+
+    lateralSpeed = (int)output;
+
+    // update state
+    lateralPrevError = error;
+    lateralLastTime  = now;
+
   }
-
   // PID Calculation (thanks gpt)
 
   unsigned long now = millis();

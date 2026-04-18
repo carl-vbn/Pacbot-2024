@@ -1,0 +1,109 @@
+.pid-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.pid-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #222;
+}
+
+.preset-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.preset-row select,
+.preset-row input[type="text"] {
+  flex: 1;
+  background: #111;
+  color: #0f0;
+  border: 1px solid #333;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 4px 6px;
+  outline: none;
+}
+
+.preset-row select:focus,
+.preset-row input[type="text"]:focus {
+  border-color: #0f0;
+}
+
+.preset-row .cmd-btn {
+  flex: 0 0 auto;
+  padding: 0 8px;
+}
+
+.pid-loop {
+  margin-bottom: 8px;
+}
+
+.pid-loop-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.pid-loop-name {
+  font-size: 11px;
+  color: #ff0;
+  letter-spacing: 1px;
+}
+
+.pid-inputs {
+  display: flex;
+  gap: 6px;
+}
+
+.pid-inputs label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: #888;
+}
+
+.pid-inputs input[type="number"] {
+  width: 100%;
+  background: #111;
+  color: #0f0;
+  border: 1px solid #333;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 4px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.pid-inputs input[type="number"]:focus {
+  border-color: #0f0;
+}
+
+.pid-inputs input[type="number"]::-webkit-inner-spin-button,
+.pid-inputs input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.pid-inputs input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.pid-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.pid-actions .cmd-btn {
+  flex: 1;
+}

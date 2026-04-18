@@ -1,0 +1,102 @@
+.robot-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.robot-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.robot-panel-header h2 {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.offset-toggle {
+  background: #111;
+  color: #888;
+  border: 1px solid #333;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.offset-toggle:hover {
+  color: #0f0;
+  border-color: #0f0;
+}
+
+.robot-panel canvas {
+  margin-top: 10px;
+  width: 100%;
+  aspect-ratio: 1.6;
+  background: #050505;
+}
+
+.sensor-offsets {
+  width: 100%;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.offset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.offset-grid label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #888;
+}
+
+.offset-grid label span {
+  width: 22px;
+  color: #ff0;
+  text-align: right;
+}
+
+.offset-grid input[type="number"] {
+  flex: 1;
+  width: 0;
+  background: #111;
+  color: #0f0;
+  border: 1px solid #333;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 4px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.offset-grid input[type="number"]:focus {
+  border-color: #0f0;
+}
+
+.offset-grid input[type="number"]::-webkit-inner-spin-button,
+.offset-grid input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.offset-grid input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.offset-send {
+  width: 100%;
+}
