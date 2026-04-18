@@ -79,9 +79,11 @@ class PacbotClient:
 		# Decision module (policy) to make high-level decisions
 		if args.strategy == 'dqn':
 			self.decisionModule = DQNDecisionModule(self.state, args.checkpoint, args.debug,
-			                                        hybrid_mode=args.hybrid_mode)
+			                                        hybrid_mode=args.hybrid_mode,
+			                                        force_no_bot=args.force_no_bot)
 		else:
-			self.decisionModule: DecisionModule = DecisionModule(self.state, args.debug)
+			self.decisionModule: DecisionModule = DecisionModule(self.state, args.debug,
+			                                                     force_no_bot=args.force_no_bot)
   
 		# list of scores for each game
 		self.scores = []

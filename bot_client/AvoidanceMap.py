@@ -3,17 +3,19 @@ from debugServer import DebugServer
 from utils import get_walkable_tiles, get_distance
 
 class cellAvoidanceMap:
-    def __init__(self, g: GameState):
+    def __init__(self, g: GameState, hybrid_mode: bool = False):
         """
         The cellAvoidanceMap is a map of the game board that assigns a score to each cell based on how desirable it is to move to that cell.
         The more negative the score, the more desirable the cell is.
         We use the cellAvoidanceMap to power the heuristic function in the A* search algorithm, as well as for target selection.
-        
+
         @param:
             - g, GameState object: the current game state
-        """ 
+            - hybrid_mode, bool: whether pacbot is running in RL hybrid mode
+        """
         self.avoidance_map = {} # tuple (row, col) -> int
         self.g = g # the current game state
+        self.hybrid_mode = hybrid_mode
         
         # All parameters listed as tunable should be experimented with to find the best values.
         self.pellet_boost = 50        # TUNABLE
@@ -72,6 +74,7 @@ class cellAvoidanceMap:
         # preset routes for the very early game
             
         route_one = {
+            (23, 9): 12,
             (26, 6): 10,
             (29, 1): 8,
             (29, 9): 6,
@@ -87,10 +90,10 @@ class cellAvoidanceMap:
         }
         
         boosted_tiles = route_one
-        
-        if tile in boosted_tiles:
+
+        if not self.hybrid_mode and tile in boosted_tiles:
             boost *= boosted_tiles[tile]
-        
+
         return boost
     
     def calculate_ghost_proximity(self, tile, ghost):

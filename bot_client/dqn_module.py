@@ -49,17 +49,19 @@ class DQNDecisionModule:
     '''
 
     def __init__(self, state: GameState, checkpoint_path: str, log: bool = False,
-                 hybrid_mode: bool = False) -> None:
+                 hybrid_mode: bool = False, force_no_bot: bool = False) -> None:
         self.state = state
         self.log = log
         self.hybrid_mode = hybrid_mode
+        self.force_no_bot = force_no_bot
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._last_ghost_pos: list[tuple[int, int]] = [(32, 32)] * 4
+        self._using_astar: bool = False
         self._load_model(checkpoint_path)
 
         if hybrid_mode:
             from decisionModule import DecisionModule
-            self._astar = DecisionModule(state, log)
+            self._astar = DecisionModule(state, log, hybrid_mode=True)
             print('[DQN] Hybrid mode enabled: falls back to A* when ghost within '
                   f'{HYBRID_GHOST_RADIUS} tiles')
 
@@ -165,9 +167,14 @@ class DQNDecisionModule:
 
     def get_direction(self) -> Directions:
         if self.hybrid_mode and self._ghost_within_radius():
-            if self.log:
-                print('[DQN] Hybrid: ghost nearby, using A*')
+            if not self._using_astar:
+                self._using_astar = True
+                print('[DQN] Hybrid: switching to A* (ghost nearby)')
             return self._astar.get_direction()
+
+        if self.hybrid_mode and self._using_astar:
+            self._using_astar = False
+            print('[DQN] Hybrid: switching to RL (ghost far)')
 
         obs = self._build_obs()
         mask = self._get_action_mask()
@@ -240,12 +247,14 @@ class DQNDecisionModule:
                     stuck_start = time()
                 elif not unstuck_triggered and (time() - stuck_start) >= 2.0:
                     unstuck_triggered = True
-                    await unstuck(self.state, stuck_pos)
+                    if not self.force_no_bot:
+                        await unstuck(self.state, stuck_pos)
             else:
                 stuck_pos = None
                 stuck_start = None
                 unstuck_triggered = False
 
             if direction != last_direction:
-                send_direction(direction)
+                if not self.force_no_bot:
+                    send_direction(direction)
                 last_direction = direction

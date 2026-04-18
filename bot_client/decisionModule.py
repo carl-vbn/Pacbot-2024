@@ -67,13 +67,14 @@ class DecisionModule:
 	programming for Pacbot, using asyncio.
 	'''
 
-	def __init__(self, state: GameState, log: bool) -> None:
+	def __init__(self, state: GameState, log: bool, hybrid_mode: bool = False, force_no_bot: bool = False) -> None:
 		self.state = state
+		self.force_no_bot = force_no_bot
 		# Next tile Pacman should move to (never more than 1 cell from current pos)
 		self.targetPos = (state.pacmanLoc.row, state.pacmanLoc.col)
 
 		self.walkable_cells = get_walkable_tiles(state)
-		self.avoidance_map = cellAvoidanceMap(state)
+		self.avoidance_map = cellAvoidanceMap(state, hybrid_mode=hybrid_mode)
 
 		if not os.path.isfile('./static/distTable.json'):
 			createDistTable(self.state)
@@ -236,14 +237,16 @@ class DecisionModule:
 					stuck_start = time()
 				elif not unstuck_triggered and (time() - stuck_start) >= 2.0:
 					unstuck_triggered = True
-					await unstuck(self.state, stuck_pos)
+					if not self.force_no_bot:
+						await unstuck(self.state, stuck_pos)
 			else:
 				stuck_pos = None
 				stuck_start = None
 				unstuck_triggered = False
 
 			if direction != last_direction:
-				send_direction(direction)
+				if not self.force_no_bot:
+					send_direction(direction)
 				last_direction = direction
 
 """
