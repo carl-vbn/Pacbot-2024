@@ -1,0 +1,184 @@
+import asyncio
+import os
+import sys
+
+import numpy as np
+import torch
+
+from gameState import GameState, GameModes, Directions
+from debugServer import DebugServer
+from decisionModule import send_to_teensey
+
+# Path to the curc-pacbot-rl model definitions
+_RL_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../curc-pacbot-rl/src')
+sys.path.insert(0, _RL_SRC)
+import models as _dqn_models  # noqa: E402
+
+# Observation / action constants (from pacbot_rs_2/variables.rs and game_modes.rs)
+OBS_SHAPE = torch.Size([17, 28, 31])
+NUM_ACTIONS = 5
+GHOST_FRIGHT_STEPS = 40
+COMBO_MULTIPLIER = 200
+PELLET_POINTS = 10
+SUPER_PELLET_POINTS = 50
+FRUIT_POINTS = 100
+CHASE_DURATION = 180  # GameMode::CHASE.duration()
+
+SUPER_PELLET_ROWS = frozenset({3, 23})
+SUPER_PELLET_COLS = frozenset({1, 26})
+
+# DQN action index → Pacbot Directions enum
+# Rust Action enum: Stay=0, Down=1, Up=2, Left=3, Right=4
+_ACTION_TO_DIR = [
+    Directions.NONE,   # 0: Stay
+    Directions.DOWN,   # 1: Down
+    Directions.UP,     # 2: Up
+    Directions.LEFT,   # 3: Left
+    Directions.RIGHT,  # 4: Right
+]
+
+
+class DQNDecisionModule:
+    '''
+    Decision module that uses a pretrained DQN to select Pacbot actions.
+    Drop-in replacement for DecisionModule — exposes the same decisionLoop().
+    '''
+
+    def __init__(self, state: GameState, checkpoint_path: str, log: bool = False) -> None:
+        self.state = state
+        self.log = log
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self._last_ghost_pos: list[tuple[int, int]] = [(32, 32)] * 4
+        self._load_model(checkpoint_path)
+
+    # ------------------------------------------------------------------
+    # Model loading
+    # ------------------------------------------------------------------
+
+    def _load_model(self, checkpoint_path: str) -> None:
+        loaded = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+        model_name: str = loaded.get('config', {}).get('model', 'QNetV2')
+        model_class = getattr(_dqn_models, model_name)
+        self.q_net = model_class(OBS_SHAPE, NUM_ACTIONS).to(self.device)
+        self.q_net.load_state_dict(loaded['state_dict'])
+        self.q_net.eval()
+        print(f'[DQN] Loaded {model_name} (iter={loaded.get("iter_num","?")}) on {self.device}')
+
+    # ------------------------------------------------------------------
+    # Observation construction
+    # Matches the 17-channel (channels, col, obs_row) format used during
+    # training, where obs_row = 30 - row (y-flipped from game coordinates).
+    # ------------------------------------------------------------------
+
+    def _build_obs(self) -> torch.Tensor:
+        g = self.state
+        obs = np.zeros((17, 28, 31), dtype=np.float32)
+
+        # Channels 0 (walls) and 1 (rewards)
+        for row in range(31):
+            obs_row = 30 - row
+            for col in range(28):
+                if g.wallAt(row, col):
+                    obs[0, col, obs_row] = 1.0
+                if g.pelletAt(row, col):
+                    is_super = row in SUPER_PELLET_ROWS and col in SUPER_PELLET_COLS
+                    pts = SUPER_PELLET_POINTS if is_super else PELLET_POINTS
+                    obs[1, col, obs_row] = pts / COMBO_MULTIPLIER
+                elif g.fruitSteps > 0 and g.fruitLoc.row == row and g.fruitLoc.col == col:
+                    obs[1, col, obs_row] = FRUIT_POINTS / COMBO_MULTIPLIER
+
+        # Channels 2-3: Pacman (last pos reused as current; no tracking overhead)
+        pr, pc = g.pacmanLoc.row, g.pacmanLoc.col
+        if 0 <= pr < 31 and 0 <= pc < 28:
+            obs[2, pc, 30 - pr] = 1.0
+            obs[3, pc, 30 - pr] = 1.0
+
+        # Channels 4-7: ghost current positions
+        # Channels 8-11: ghost last positions (from previous step)
+        # Channels 12-14: mode state at ghost location
+        for i, ghost in enumerate(g.ghosts):
+            gr, gc = ghost.location.row, ghost.location.col
+            if 0 <= gr < 31 and 0 <= gc < 28:
+                gobs = 30 - gr
+                obs[4 + i, gc, gobs] = 1.0
+                if ghost.isFrightened():
+                    obs[14, gc, gobs] = ghost.frightSteps / GHOST_FRIGHT_STEPS
+                else:
+                    progress = g.modeSteps / CHASE_DURATION
+                    ch = 13 if g.gameMode == GameModes.CHASE else 12
+                    obs[ch, gc, gobs] = progress
+
+            lgr, lgc = self._last_ghost_pos[i]
+            if 0 <= lgr < 31 and 0 <= lgc < 28:
+                obs[8 + i, lgc, 30 - lgr] = 1.0
+
+        # Channel 15: ticks_per_step / update_period (1.0 approximation)
+        obs[15, :, :] = 1.0
+
+        # Channel 16: super pellet locations
+        for row in SUPER_PELLET_ROWS:
+            for col in SUPER_PELLET_COLS:
+                if g.pelletAt(row, col):
+                    obs[16, col, 30 - row] = 1.0
+
+        return torch.from_numpy(obs).unsqueeze(0).to(self.device)  # (1,17,28,31)
+
+    # ------------------------------------------------------------------
+    # Action mask: True = action is physically reachable
+    # ------------------------------------------------------------------
+
+    def _get_action_mask(self) -> torch.Tensor:
+        g = self.state
+        row, col = g.pacmanLoc.row, g.pacmanLoc.col
+        # Order matches Action enum: Stay, Down, Up, Left, Right
+        deltas = [(0, 0), (1, 0), (-1, 0), (0, -1), (0, 1)]
+        mask = [True] + [not g.wallAt(row + dr, col + dc) for dr, dc in deltas[1:]]
+        return torch.tensor(mask, dtype=torch.bool).unsqueeze(0).to(self.device)
+
+    # ------------------------------------------------------------------
+    # Inference
+    # ------------------------------------------------------------------
+
+    def _get_direction(self) -> Directions:
+        obs = self._build_obs()
+        mask = self._get_action_mask()
+
+        with torch.no_grad():
+            q_vals = self.q_net(obs)        # (1, 5)
+            q_vals[~mask] = -float('inf')
+            action = int(q_vals.argmax(dim=1).item())
+
+        # Record ghost positions for the next step's last-position channels
+        for i, ghost in enumerate(self.state.ghosts):
+            self._last_ghost_pos[i] = (ghost.location.row, ghost.location.col)
+
+        return _ACTION_TO_DIR[action]
+
+    # ------------------------------------------------------------------
+    # Main async loop (same interface as DecisionModule.decisionLoop)
+    # ------------------------------------------------------------------
+
+    async def decisionLoop(self) -> None:
+        while self.state.isConnected():
+            if len(self.state.writeServerBuf):
+                await asyncio.sleep(0)
+                continue
+
+            self.state.lock()
+
+            direction = self._get_direction()
+
+            if self.log:
+                print(f'[DQN] pacman=({self.state.pacmanLoc.row},{self.state.pacmanLoc.col}) '
+                      f'action={direction.name}')
+
+            if direction != Directions.NONE:
+                self.state.queueAction(1, direction)
+
+            if self.state.gameMode != GameModes.PAUSED:
+                send_to_teensey(direction)
+            else:
+                send_to_teensey(Directions.NONE)
+
+            self.state.unlock()
+            await asyncio.sleep(0.2)

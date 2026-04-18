@@ -1,5 +1,6 @@
 # JSON (for reading config.json)
 import json
+import os
 
 # Asyncio (for concurrency)
 import asyncio
@@ -12,8 +13,9 @@ from websockets.typing import Data # type: ignore
 # Game state
 from gameState import GameState
 
-# Decision module
+# Decision modules
 from decisionModule import DecisionModule
+from dqn_module import DQNDecisionModule
 
 # Server messages
 from serverMessage import *
@@ -75,7 +77,10 @@ class PacbotClient:
 		self.state: GameState = GameState(False if args.games == 1 else True)
 
 		# Decision module (policy) to make high-level decisions
-		self.decisionModule: DecisionModule = DecisionModule(self.state, args.debug)
+		if args.strategy == 'dqn':
+			self.decisionModule = DQNDecisionModule(self.state, args.checkpoint, args.debug)
+		else:
+			self.decisionModule: DecisionModule = DecisionModule(self.state, args.debug)
   
 		# list of scores for each game
 		self.scores = []
@@ -231,11 +236,20 @@ async def main():
 	loop = asyncio.get_event_loop()
 	loop.stop()
 
+_DEFAULT_CHECKPOINT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    '../../curc-pacbot-rl/src/checkpoints_EC2/second-checkpoints/checkpoints/q_net-latest.ckpt.pt'
+)
+
 parser = argparse.ArgumentParser(description='Pacbot client that is the brains of the operation')
 parser.add_argument('--debug', action='store_true', help='Enable debug mode, where the pathfinding is displayed')
 parser.add_argument('--games', type=int, default=-1, help='Number of games to run, -1 for infinite')
 parser.add_argument('--delay', type=int, default=0, help='Delay between games in milliseconds')
 parser.add_argument('--output', type=str, default='', help='Output file for scores')
+parser.add_argument('--strategy', choices=['astar', 'dqn'], default='astar',
+                    help='Decision strategy: astar (default) or dqn')
+parser.add_argument('--checkpoint', type=str, default=_DEFAULT_CHECKPOINT,
+                    help='Path to DQN checkpoint .pt file (used when --strategy=dqn)')
 
 args = parser.parse_args()
 
