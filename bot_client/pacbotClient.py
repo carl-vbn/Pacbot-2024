@@ -198,7 +198,8 @@ class PacbotClient:
 				# Write a response back to the server if necessary
 				if self.state.writeServerBuf and self.state.writeServerBuf[0].tick():
 					response: bytes = self.state.writeServerBuf.popleft().getBytes()
-					self.connection.send(response)
+					if not args.competition_mode:
+						self.connection.send(response)
 
 				# Free the event loop to allow another decision
 				await asyncio.sleep(0)
@@ -250,6 +251,8 @@ parser.add_argument('--strategy', choices=['astar', 'dqn'], default='astar',
                     help='Decision strategy: astar (default) or dqn')
 parser.add_argument('--checkpoint', type=str, default=_DEFAULT_CHECKPOINT,
                     help='Path to DQN checkpoint .pt file (used when --strategy=dqn)')
+parser.add_argument('--competition_mode', action='store_true',
+                    help='Suppress sending location updates to the game server (for physical competition use)')
 
 args = parser.parse_args()
 
