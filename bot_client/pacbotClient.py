@@ -75,7 +75,14 @@ class PacbotClient:
 		self.state: GameState = GameState(False if args.games == 1 else True)
 
 		# Decision module (policy) to make high-level decisions
-		self.decisionModule: DecisionModule = DecisionModule(self.state, args.debug)
+		self.decisionModule: DecisionModule = DecisionModule(
+			self.state,
+			args.debug,
+			args.policy,
+			args.dqn_checkpoint,
+			args.dqn_device,
+			args.dqn_super_checkpoint,
+		)
   
 		# list of scores for each game
 		self.scores = []
@@ -236,6 +243,10 @@ parser.add_argument('--debug', action='store_true', help='Enable debug mode, whe
 parser.add_argument('--games', type=int, default=-1, help='Number of games to run, -1 for infinite')
 parser.add_argument('--delay', type=int, default=0, help='Delay between games in milliseconds')
 parser.add_argument('--output', type=str, default='', help='Output file for scores')
+parser.add_argument('--policy', choices=['astar', 'dqn'], default='astar', help='Decision policy to run')
+parser.add_argument('--dqn-checkpoint', type=str, default='checkpoints/fourth_try/q_net-latest.safetensors', help='Path to a DQN checkpoint (.safetensors or .ckpt.pt)')
+parser.add_argument('--dqn-device', type=str, default=None, help='Torch device for DQN inference, e.g. cpu, cuda, or mps')
+parser.add_argument('--dqn-super-checkpoint', type=str, default='checkpoints_known/superpelletmode.safetensors', help='Optional DQN checkpoint to use when ghosts are close or frightened')
 
 args = parser.parse_args()
 

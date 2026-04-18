@@ -14,7 +14,7 @@ def estimate_heuristic(node_pos, target_pos, cell_avoidance_map):
     """Heuristic is based on Euclidean distance between node and target, plus cell avoidance map value."""
     if (node_pos == (32, 32)):
         return 0
-    return get_distance(node_pos, target_pos) + (cell_avoidance_map[node_pos] if cell_avoidance_map is not None else 0)
+    return 2*get_distance(node_pos, target_pos) + (cell_avoidance_map[node_pos] if cell_avoidance_map is not None else 0)
 
 
 def find_path(start, target, g: GameState, avoidance_map, log: bool):

@@ -70,7 +70,15 @@ class DecisionModule:
 	programming for Pacbot, using asyncio.
 	'''
 
-	def __init__(self, state: GameState, log: bool) -> None:
+	def __init__(
+		self,
+		state: GameState,
+		log: bool,
+		policy: str = "astar",
+		dqn_checkpoint: str | None = None,
+		dqn_device: str | None = None,
+		dqn_super_checkpoint: str | None = None,
+	) -> None:
 		'''
 		Construct a new decision module object
 		'''
@@ -94,6 +102,14 @@ class DecisionModule:
 		self.distTable = loadDistTable()
 		self.dtDict = loadDistTableDict()
 		self.log = log
+		self.policy = policy
+		self.dqn_policy = None
+		if self.policy == "dqn":
+			from dqnPolicy import DQNPolicy
+
+			if dqn_checkpoint is None:
+				raise ValueError("DQN policy requires --dqn-checkpoint")
+			self.dqn_policy = DQNPolicy(dqn_checkpoint, dqn_device, log, dqn_super_checkpoint)
 		self.lastMovementTime = None
 		self.STUCK_THRESHOLD = 3 # seconds
 		self.prevLocation = (23, 13) # initial location of pacbot
@@ -202,60 +218,75 @@ class DecisionModule:
 
 			# Lock the game state
 			self.state.lock()
+			try:
+				if self.log:
+					print(f"Current: {self.state.pacmanLoc.row}, {self.state.pacmanLoc.col}")
+					print(f"Target: {self.targetPos[0]}, {self.targetPos[1]}")
 
-			if self.log:
-				print(f"Current: {self.state.pacmanLoc.row}, {self.state.pacmanLoc.col}")
-				print(f"Target: {self.targetPos[0]}, {self.targetPos[1]}")
-
-			# Calculate the delta between the current position and the target position
-			deltaRow = self.targetPos[0] - self.state.pacmanLoc.row
-			deltaCol = self.targetPos[1] - self.state.pacmanLoc.col
-			absDelta = abs(deltaRow) + abs(deltaCol)
-   
-			direction = None
-
-			# Perform the decision-making process
-			if absDelta != 1:
-				# If we're at the target location, or the target locatipn is somehow unreachable from the current position,
-				# update the target location
-				self.update_target_loc()
-			else:
-				if self.state.pacmanLoc.row == self.prevLocation[0] and self.state.pacmanLoc.col == self.prevLocation[1]:
-					# only start tracking time once we are playing
-					if self.lastMovementTime is None:
-						self.lastMovementTime = time()
-					if self.log:
-						print(f"Stuck for {time() - self.lastMovementTime} seconds")
-					if (time() - self.lastMovementTime) > self.STUCK_THRESHOLD:
-						# If we are stuck for more than STUCK_THRESHOLD seconds, move randomly
-						if self.log:
-							print("GOING RANDOM.")
-						direction = Directions.RANDOM
-				
-    			# Otherwise, move towards the target location
-				if direction is None:
-					# Get the direction to move in
-					direction = direction_from_delta(deltaRow, deltaCol)
-
-					# Update our position on the server.
-					# !TODO: In the future, this needs to be replaced by a call to the low level movement code
+				if self.policy == "dqn":
+					assert self.dqn_policy is not None
+					direction = self.dqn_policy.choose_direction(self.state)
+					self.targetPos = (
+						self.state.pacmanLoc.row + D_ROW[direction],
+						self.state.pacmanLoc.col + D_COL[direction],
+					)
+					DebugServer.instance.set_path([self.targetPos])
 					self.state.queueAction(1, direction)
-				if self.state.gameMode != GameModes.PAUSED:
-					send_to_teensey(direction)
+					if self.state.gameMode != GameModes.PAUSED:
+						send_to_teensey(direction)
+					else:
+						send_to_teensey(Directions.NONE)
+					await asyncio.sleep(0.2)
 				else:
-					send_to_teensey(Directions.NONE)
-				if self.prevLocation != (self.state.pacmanLoc.row, self.state.pacmanLoc.col) or self.state.gameMode == GameModes.PAUSED:
-					self.lastMovementTime = time()
-					self.prevLocation = (self.state.pacmanLoc.row, self.state.pacmanLoc.col)
-				await asyncio.sleep(0.2)
+					# Calculate the delta between the current position and the target position
+					deltaRow = self.targetPos[0] - self.state.pacmanLoc.row
+					deltaCol = self.targetPos[1] - self.state.pacmanLoc.col
+					absDelta = abs(deltaRow) + abs(deltaCol)
+	
+					direction = None
+
+					# Perform the decision-making process
+					if absDelta != 1:
+						# If we're at the target location, or the target locatipn is somehow unreachable from the current position,
+						# update the target location
+						self.update_target_loc()
+					else:
+						if self.state.pacmanLoc.row == self.prevLocation[0] and self.state.pacmanLoc.col == self.prevLocation[1]:
+							# only start tracking time once we are playing
+							if self.lastMovementTime is None:
+								self.lastMovementTime = time()
+							if self.log:
+								print(f"Stuck for {time() - self.lastMovementTime} seconds")
+							if (time() - self.lastMovementTime) > self.STUCK_THRESHOLD:
+								# If we are stuck for more than STUCK_THRESHOLD seconds, move randomly
+								if self.log:
+									print("GOING RANDOM.")
+								direction = Directions.RANDOM
+						
+		    			# Otherwise, move towards the target location
+						if direction is None:
+							# Get the direction to move in
+							direction = direction_from_delta(deltaRow, deltaCol)
+
+							# Update our position on the server.
+							# !TODO: In the future, this needs to be replaced by a call to the low level movement code
+							self.state.queueAction(1, direction)
+						if self.state.gameMode != GameModes.PAUSED:
+							send_to_teensey(direction)
+						else:
+							send_to_teensey(Directions.NONE)
+						if self.prevLocation != (self.state.pacmanLoc.row, self.state.pacmanLoc.col) or self.state.gameMode == GameModes.PAUSED:
+							self.lastMovementTime = time()
+							self.prevLocation = (self.state.pacmanLoc.row, self.state.pacmanLoc.col)
+						await asyncio.sleep(0.2)
+			finally:
+				# Unlock the game state
+				self.state.unlock()
 				
 
 
 				
 				
-			# Unlock the game state
-			self.state.unlock()
-
 			# Print that a decision has been made
 			# print('decided')
 
