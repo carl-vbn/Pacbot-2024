@@ -231,12 +231,12 @@ class DecisionModule:
 
 			if direction != Directions.NONE:
 				if pacman_pos != stuck_pos:
+					unstuck_triggered = False
 					stuck_pos = pacman_pos
 					stuck_start = time()
-					unstuck_triggered = False
 				elif not unstuck_triggered and (time() - stuck_start) >= 2.0:
-					await unstuck(self.state, stuck_pos)
 					unstuck_triggered = True
+					await unstuck(self.state, stuck_pos)
 			else:
 				stuck_pos = None
 				stuck_start = None

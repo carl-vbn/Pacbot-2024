@@ -6,8 +6,12 @@ s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
 connected = False
 
-def connect():
+def connect(force_no_bot: bool = False):
     global connected
+    if force_no_bot:
+        print("[Low level] force_no_bot: skipping robot socket connection")
+        connected = False
+        return
     try:
         s.connect("/tmp/pacbot.sock")
         connected = True
@@ -42,10 +46,11 @@ async def unstuck(state, stuck_pos: tuple) -> None:
     Send all four directions in quick succession to try to free the robot if it's stuck.
     Exits early if pacbot moves away from stuck_pos.
     '''
+    print(f"UNSTUCK triggered at {stuck_pos}")
     for direction in [Directions.UP, Directions.DOWN, Directions.RIGHT, Directions.LEFT, Directions.NONE]:
         if (state.pacmanLoc.row, state.pacmanLoc.col) != stuck_pos:
+            print("Pacbot moved, exiting unstuck")
             break
         send_direction(direction)
         await asyncio.sleep(0.2)
 
-connect()

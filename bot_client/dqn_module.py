@@ -39,18 +39,29 @@ _ACTION_TO_DIR = [
 ]
 
 
+HYBRID_GHOST_RADIUS = 2
+
+
 class DQNDecisionModule:
     '''
     Decision module that uses a pretrained DQN to select Pacbot actions.
     Drop-in replacement for DecisionModule — exposes the same decisionLoop().
     '''
 
-    def __init__(self, state: GameState, checkpoint_path: str, log: bool = False) -> None:
+    def __init__(self, state: GameState, checkpoint_path: str, log: bool = False,
+                 hybrid_mode: bool = False) -> None:
         self.state = state
         self.log = log
+        self.hybrid_mode = hybrid_mode
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._last_ghost_pos: list[tuple[int, int]] = [(32, 32)] * 4
         self._load_model(checkpoint_path)
+
+        if hybrid_mode:
+            from decisionModule import DecisionModule
+            self._astar = DecisionModule(state, log)
+            print('[DQN] Hybrid mode enabled: falls back to A* when ghost within '
+                  f'{HYBRID_GHOST_RADIUS} tiles')
 
     # ------------------------------------------------------------------
     # Model loading
@@ -137,10 +148,27 @@ class DQNDecisionModule:
         return torch.tensor(mask, dtype=torch.bool).unsqueeze(0).to(self.device)
 
     # ------------------------------------------------------------------
+    # Hybrid-mode helper
+    # ------------------------------------------------------------------
+
+    def _ghost_within_radius(self) -> bool:
+        pr, pc = self.state.pacmanLoc.row, self.state.pacmanLoc.col
+        for ghost in self.state.ghosts:
+            gr, gc = ghost.location.row, ghost.location.col
+            if abs(pr - gr) + abs(pc - gc) <= HYBRID_GHOST_RADIUS:
+                return True
+        return False
+
+    # ------------------------------------------------------------------
     # Inference
     # ------------------------------------------------------------------
 
     def get_direction(self) -> Directions:
+        if self.hybrid_mode and self._ghost_within_radius():
+            if self.log:
+                print('[DQN] Hybrid: ghost nearby, using A*')
+            return self._astar.get_direction()
+
         obs = self._build_obs()
         mask = self._get_action_mask()
 
@@ -207,12 +235,12 @@ class DQNDecisionModule:
 
             if direction != Directions.NONE:
                 if pacman_pos != stuck_pos:
+                    unstuck_triggered = False
                     stuck_pos = pacman_pos
                     stuck_start = time()
-                    unstuck_triggered = False
                 elif not unstuck_triggered and (time() - stuck_start) >= 2.0:
-                    await unstuck(self.state, stuck_pos)
                     unstuck_triggered = True
+                    await unstuck(self.state, stuck_pos)
             else:
                 stuck_pos = None
                 stuck_start = None

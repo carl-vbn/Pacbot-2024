@@ -78,7 +78,8 @@ class PacbotClient:
 
 		# Decision module (policy) to make high-level decisions
 		if args.strategy == 'dqn':
-			self.decisionModule = DQNDecisionModule(self.state, args.checkpoint, args.debug)
+			self.decisionModule = DQNDecisionModule(self.state, args.checkpoint, args.debug,
+			                                        hybrid_mode=args.hybrid_mode)
 		else:
 			self.decisionModule: DecisionModule = DecisionModule(self.state, args.debug)
   
@@ -253,10 +254,20 @@ parser.add_argument('--strategy', choices=['astar', 'dqn'], default='astar',
                     help='Decision strategy: astar (default) or dqn')
 parser.add_argument('--checkpoint', type=str, default=_DEFAULT_CHECKPOINT,
                     help='Path to DQN checkpoint .pt file (used when --strategy=dqn)')
-parser.add_argument('--competition_mode', action='store_true',
+parser.add_argument('--hybrid_mode', action=argparse.BooleanOptionalAction, default=True,
+                    help='(DQN only) Fall back to A* when any ghost is within 2 tiles (default: on)')
+parser.add_argument('--competition_mode', action=argparse.BooleanOptionalAction, default=True,
                     help='Suppress sending location updates to the game server (for physical competition use)')
+parser.add_argument('--force_no_bot', action='store_true',
+                    help='Skip robot socket connection (simulate without physical bot)')
 
 args = parser.parse_args()
+
+if args.force_no_bot:
+	args.competition_mode = False
+
+import low_level
+low_level.connect(force_no_bot=args.force_no_bot)
 
 if __name__ == '__main__':
 	asyncio.run(main())
