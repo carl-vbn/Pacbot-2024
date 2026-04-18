@@ -19,7 +19,7 @@ export default function App() {
 
   const clearLogs = useCallback(() => setLogs([]), []);
 
-  const { wsConnected, robotState, send } = useRobotSocket(addLog);
+  const { wsConnected, robotState, send } = useRobotSocket(addLog, setActiveDirection);
 
   return (
     <>

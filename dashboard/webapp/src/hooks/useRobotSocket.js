@@ -2,12 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 const WS_URL = `ws://${window.location.host}/ws`;
 
-export default function useRobotSocket(onLog) {
+export default function useRobotSocket(onLog, onExternalDirection) {
   const [wsConnected, setWsConnected] = useState(false);
   const [robotState, setRobotState] = useState(null);
   const wsRef = useRef(null);
   const onLogRef = useRef(onLog);
   onLogRef.current = onLog;
+  const onExternalDirectionRef = useRef(onExternalDirection);
+  onExternalDirectionRef.current = onExternalDirection;
 
   const send = useCallback((obj) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -63,6 +65,9 @@ export default function useRobotSocket(onLog) {
             break;
           case "pong":
             onLogRef.current?.("info", `PONG uptime=${msg.uptime_ms}ms`);
+            break;
+          case "external_direction":
+            onExternalDirectionRef.current?.(msg.direction ?? null);
             break;
           case "device_info": {
             const mask = msg.sensor_mask ?? 0;
