@@ -39,7 +39,7 @@ _ACTION_TO_DIR = [
 ]
 
 
-HYBRID_GHOST_RADIUS = 2
+HYBRID_GHOST_RADIUS = 3
 
 
 class DQNDecisionModule:
@@ -153,6 +153,8 @@ class DQNDecisionModule:
     # Hybrid-mode helper
     # ------------------------------------------------------------------
 
+    SUPER_PELLET_CHASE_RADIUS = 20
+
     def _ghost_within_radius(self) -> bool:
         pr, pc = self.state.pacmanLoc.row, self.state.pacmanLoc.col
         for ghost in self.state.ghosts:
@@ -163,12 +165,26 @@ class DQNDecisionModule:
                 return True
         return False
 
+    def _astar_targeting_nearby_super_pellet(self) -> bool:
+        """Return True if A*'s current destination is a super pellet within 20 tiles."""
+        dest = getattr(self._astar, 'destination', None)
+        if dest is None:
+            return False
+        dr, dc = dest
+        if dr not in SUPER_PELLET_ROWS or dc not in SUPER_PELLET_COLS:
+            return False
+        if not self.state.pelletAt(dr, dc):
+            return False
+        pr, pc = self.state.pacmanLoc.row, self.state.pacmanLoc.col
+        return abs(pr - dr) + abs(pc - dc) <= self.SUPER_PELLET_CHASE_RADIUS
+
     # ------------------------------------------------------------------
     # Inference
     # ------------------------------------------------------------------
 
     def get_direction(self) -> Directions:
-        if self.hybrid_mode and self._ghost_within_radius():
+        if self.hybrid_mode and (self._ghost_within_radius() or
+                                  (self._using_astar and self._astar_targeting_nearby_super_pellet())):
             if not self._using_astar:
                 self._using_astar = True
                 print('[DQN] Hybrid: switching to A* (ghost nearby)')
@@ -176,7 +192,7 @@ class DQNDecisionModule:
 
         if self.hybrid_mode and self._using_astar:
             self._using_astar = False
-            print('[DQN] Hybrid: switching to RL (ghost far)')
+            print('[DQN] Hybrid: switching to RL (ghost far, no nearby super pellet target)')
 
         obs = self._build_obs()
         mask = self._get_action_mask()

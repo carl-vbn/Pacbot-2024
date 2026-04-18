@@ -244,7 +244,7 @@ async def main():
 
 _DEFAULT_CHECKPOINT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    '../../curc-pacbot-rl/src/checkpoints_EC2/second-checkpoints/checkpoints/q_net-latest.ckpt.pt'
+    '../../curc-pacbot-rl/src/checkpoints_all/winnie_ec2/checkpoints/q_net-iter0165500.ckpt.pt'
 )
 
 parser = argparse.ArgumentParser(description='Pacbot client that is the brains of the operation')

@@ -72,6 +72,7 @@ class DecisionModule:
 		self.force_no_bot = force_no_bot
 		# Next tile Pacman should move to (never more than 1 cell from current pos)
 		self.targetPos = (state.pacmanLoc.row, state.pacmanLoc.col)
+		self.destination = self.targetPos  # final A* destination (not just next step)
 
 		self.walkable_cells = get_walkable_tiles(state)
 		self.avoidance_map = cellAvoidanceMap(state, hybrid_mode=hybrid_mode)
@@ -118,6 +119,7 @@ class DecisionModule:
 
 		if avoidanceScores:
 			target = min(avoidanceScores, key=avoidanceScores.get)
+			self.destination = target
 		else:
 			while True:
 				rand_move = random.choice([
@@ -128,6 +130,7 @@ class DecisionModule:
 				])
 				if rand_move in self.walkable_cells:
 					target = rand_move
+					self.destination = target
 					break
 
 		path = find_path(pacmanPos, target, self.state, self.avoidance_map, self.log)
