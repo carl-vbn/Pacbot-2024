@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from gameState import GameState, GameModes, Directions
+import low_level
 from low_level import send_direction
 
 # Path to the curc-pacbot-rl model definitions
@@ -155,7 +156,12 @@ class DQNDecisionModule:
 
     # ------------------------------------------------------------------
     # Main async loop (same interface as DecisionModule.decisionLoop)
-    # Runs as fast as possible, acting on every new server state update.
+    #
+    # Two modes depending on low_level.connected:
+    #   connected     — act once per server state update (gate on currTicks)
+    #   not connected — 3 pacbot moves per 2 ghost moves; ghosts move every
+    #                   12 ticks at 24 fps = 0.5 s, so sleep 1/3 s per move
+    #
     # Calls send_direction only when the output direction changes.
     # ------------------------------------------------------------------
 
@@ -164,13 +170,16 @@ class DQNDecisionModule:
         last_direction = Directions.NONE
 
         while self.state.isConnected():
-            # Yield to let the receive loop process incoming messages
-            await asyncio.sleep(0)
-
-            # Only act when a new game state has arrived from the server
-            if self.state.currTicks == last_ticks:
-                continue
-            last_ticks = self.state.currTicks
+            if low_level.connected:
+                # Physical robot: act once per server state update
+                await asyncio.sleep(0)
+                if self.state.currTicks == last_ticks:
+                    continue
+                last_ticks = self.state.currTicks
+            else:
+                # Simulation: 3 pacbot moves per 2 ghost moves = 1 move per 1/3 s
+                await asyncio.sleep(1 / 3)
+                last_ticks = self.state.currTicks
 
             if self.state.gameMode == GameModes.PAUSED:
                 continue

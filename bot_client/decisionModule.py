@@ -9,6 +9,7 @@ from utils import get_distance, get_walkable_tiles
 from DistMatrix import createDistTable, createDistTableDict, loadDistTable, loadDistTableDict
 from pathfinding import find_path
 from AvoidanceMap import cellAvoidanceMap
+import low_level
 from low_level import send_direction
 
 # UNCOMMENT GPIO CODE IF RUNNING ON ACTUAL ROBOT (NOT SIMULATOR)
@@ -183,20 +184,22 @@ class DecisionModule:
 
 	async def decisionLoop(self) -> None:
 		'''
-		Runs as fast as possible, acting on every new server state update.
+		Two modes depending on low_level.connected:
+		  connected     — 0.2 s delay after each move
+		  not connected — 3 pacbot moves per 2 ghost moves; ghosts move every
+		                  12 ticks at 24 fps = 0.5 s, so sleep 1/3 s per move
+
 		Calls send_direction only when the output direction changes.
 		'''
 		last_ticks = -1
 		last_direction = Directions.NONE
 
 		while self.state.isConnected():
-			# Yield to let the receive loop process incoming messages
-			await asyncio.sleep(0)
-
-			# Only act when a new game state has arrived from the server
-			if self.state.currTicks == last_ticks:
-				continue
-			last_ticks = self.state.currTicks
+			if low_level.connected:
+				await asyncio.sleep(0)
+			else:
+				await asyncio.sleep(1 / 3)
+				last_ticks = self.state.currTicks
 
 			if self.state.gameMode == GameModes.PAUSED:
 				continue
@@ -220,6 +223,9 @@ class DecisionModule:
 			if direction != last_direction:
 				send_direction(direction)
 				last_direction = direction
+
+			if low_level.connected and direction != Directions.NONE:
+				await asyncio.sleep(0.2)
 
 """
 ================================================.
