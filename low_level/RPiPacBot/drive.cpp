@@ -273,7 +273,7 @@ bool driveUpdate(float currentYaw) {
     for (uint8_t i = 0; i < NUM_MOTORS; i++) {
         float val = fwd   * MIX_FWD[i]    * effectiveSpeed
                   + right * MIX_RIGHT[i]   * effectiveSpeed
-                  + headingCorr            * MIX_ROT_CW[i]
+                  + headingCorr            * MIX_ROT_CW[i]  * speedFrac
                   + lateralCorrection      * latMix[i]      * speedFrac;
         int16_t clamped = constrain((int16_t)val, -255, 255);
         out[i].direction = (clamped < 0) ? 1 : 0;

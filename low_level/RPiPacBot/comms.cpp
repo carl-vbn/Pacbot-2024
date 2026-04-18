@@ -15,6 +15,10 @@ static uint8_t       rxBuf[MAX_PACKET_SIZE];
 static uint32_t      lastAliveSent  = 0;
 static uint32_t      lastDataSent   = 0;
 static bool          deviceInfoSent = false;
+static uint32_t      lastWiFiCheck  = 0;
+static bool          wifiWasConnected = false;
+
+#define WIFI_CHECK_INTERVAL_MS 2000
 
 // -- Helpers -----------------------------------------------------------
 
@@ -351,7 +355,11 @@ void commsSetup() {
     serverIP.fromString(SERVER_IP);
 
     WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    if (strlen(WIFI_PASSWORD) == 0) {
+        WiFi.begin(WIFI_SSID);
+    } else {
+        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    }
 
     // Block core 1 until WiFi connects (core 0 can proceed with HW init)
     while (WiFi.status() != WL_CONNECTED) {
@@ -359,18 +367,49 @@ void commsSetup() {
     }
 
     udp.begin(0);  // ephemeral port -- server learns it from first packet
+    wifiWasConnected = true;
 
     // Send first alive immediately (device info is sent once core 0 signals ready)
     sendAlive();
     lastAliveSent = millis();
+    lastWiFiCheck = lastAliveSent;
 }
 
 void commsLoop() {
+    uint32_t now = millis();
+
+    // Periodic WiFi connection check / reconnect
+    if (now - lastWiFiCheck >= WIFI_CHECK_INTERVAL_MS) {
+        lastWiFiCheck = now;
+        bool connected = (WiFi.status() == WL_CONNECTED);
+        if (!connected) {
+            if (wifiWasConnected) {
+                udp.stop();
+                wifiWasConnected = false;
+            }
+            // Kick off a (re)connect attempt; non-blocking
+            if (strlen(WIFI_PASSWORD) == 0) {
+                WiFi.begin(WIFI_SSID);
+            } else {
+                WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+            }
+        } else if (!wifiWasConnected) {
+            // Just (re)connected -- reopen socket and resend device info
+            udp.begin(0);
+            wifiWasConnected = true;
+            deviceInfoSent   = false;
+            sendAlive();
+            lastAliveSent = now;
+        }
+    }
+
+    // Skip all send/receive work while disconnected
+    if (WiFi.status() != WL_CONNECTED) return;
+
     // Always check for inbound commands
     handleRx();
 
     RobotState st = commsGetState();
-    uint32_t now  = millis();
 
     switch (st) {
         case STATE_IDLE: {
