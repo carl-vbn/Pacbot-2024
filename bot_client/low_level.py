@@ -9,7 +9,7 @@ connected = False
 def connect():
     global connected
     try:
-        s.connect("/tmp/robot_socket")
+        s.connect("/tmp/pacbot.sock")
         connected = True
     except socket.error as e:
         print(f"[Low level] Could not connect to robot socket: {e}")
