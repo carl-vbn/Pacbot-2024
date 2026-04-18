@@ -6,8 +6,9 @@ import numpy as np
 import torch
 
 from gameState import GameState, GameModes, Directions
+from time import time
 import low_level
-from low_level import send_direction
+from low_level import send_direction, unstuck
 
 # Path to the curc-pacbot-rl model definitions
 _RL_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../curc-pacbot-rl/src')
@@ -168,6 +169,9 @@ class DQNDecisionModule:
     async def decisionLoop(self) -> None:
         last_ticks = -1
         last_direction = Directions.NONE
+        stuck_pos = None
+        stuck_start = None
+        unstuck_triggered = False
 
         while self.state.isConnected():
             if low_level.connected:
@@ -190,6 +194,7 @@ class DQNDecisionModule:
             self.state.lock()
 
             direction = self.get_direction()
+            pacman_pos = (self.state.pacmanLoc.row, self.state.pacmanLoc.col)
 
             if self.log:
                 print(f'[DQN] pos=({self.state.pacmanLoc.row},{self.state.pacmanLoc.col}) '
@@ -199,6 +204,19 @@ class DQNDecisionModule:
                 self.state.queueAction(1, direction)
 
             self.state.unlock()
+
+            if direction != Directions.NONE:
+                if pacman_pos != stuck_pos:
+                    stuck_pos = pacman_pos
+                    stuck_start = time()
+                    unstuck_triggered = False
+                elif not unstuck_triggered and (time() - stuck_start) >= 2.0:
+                    await unstuck(self.state, stuck_pos)
+                    unstuck_triggered = True
+            else:
+                stuck_pos = None
+                stuck_start = None
+                unstuck_triggered = False
 
             if direction != last_direction:
                 send_direction(direction)

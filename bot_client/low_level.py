@@ -1,6 +1,6 @@
 from gameState import Directions
 import socket
-import time
+import asyncio
 
 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
@@ -37,13 +37,15 @@ def send_direction(direction: Directions) -> None:
     except socket.error as e:
         print(f"[Low level] Could not send direction to robot socket: {e}")
 
-def unstuck():
+async def unstuck(state, stuck_pos: tuple) -> None:
     '''
     Send all four directions in quick succession to try to free the robot if it's stuck.
+    Exits early if pacbot moves away from stuck_pos.
     '''
-
     for direction in [Directions.UP, Directions.DOWN, Directions.RIGHT, Directions.LEFT, Directions.NONE]:
+        if (state.pacmanLoc.row, state.pacmanLoc.col) != stuck_pos:
+            break
         send_direction(direction)
-        time.sleep(0.2)
+        await asyncio.sleep(0.2)
 
 connect()
