@@ -74,8 +74,15 @@ class PacbotClient:
 		# Game state object to store the game information
 		self.state: GameState = GameState(False if args.games == 1 else True)
 
+		policy = None
+		if args.dqn:
+			from dqn_policy import DQNPolicy
+			# Use the best checkpoint by default if just --dqn is passed without a path
+			checkpoint = args.dqn if os.path.isfile(args.dqn) else "../../curc-pacbot-rl/src/checkpoints/q_net-best.ckpt.pt"
+			policy = DQNPolicy(checkpoint)
+
 		# Decision module (policy) to make high-level decisions
-		self.decisionModule: DecisionModule = DecisionModule(self.state, args.debug)
+		self.decisionModule: DecisionModule = DecisionModule(self.state, args.debug, policy=policy)
   
 		# list of scores for each game
 		self.scores = []
@@ -186,6 +193,8 @@ class PacbotClient:
 							await asyncio.sleep(args.delay / 1000)
 						self.state.currLives = 3
 						self.state.currLevel = 1
+						if self.decisionModule.policy:
+							self.decisionModule.policy.reset()
 						await debug_server.reset_game()
 				elif should_resume:
 					await debug_server.resume_game()
@@ -233,6 +242,7 @@ async def main():
 
 parser = argparse.ArgumentParser(description='Pacbot client that is the brains of the operation')
 parser.add_argument('--debug', action='store_true', help='Enable debug mode, where the pathfinding is displayed')
+parser.add_argument('--dqn', type=str, nargs='?', const='default', help='Use DQN model for inference. Can optionally provide a path to a checkpoint.')
 parser.add_argument('--games', type=int, default=-1, help='Number of games to run, -1 for infinite')
 parser.add_argument('--delay', type=int, default=0, help='Delay between games in milliseconds')
 parser.add_argument('--output', type=str, default='', help='Output file for scores')

@@ -70,13 +70,14 @@ class DecisionModule:
 	programming for Pacbot, using asyncio.
 	'''
 
-	def __init__(self, state: GameState, log: bool) -> None:
+	def __init__(self, state: GameState, log: bool, policy=None) -> None:
 		'''
 		Construct a new decision module object
 		'''
 
 		# Game state object to store the game information
 		self.state = state
+		self.policy = policy
    		# The position we want Pacman to be at. Should never be more than 1 cell away from Pacman
 		# This is the next tile Pacman should move to, NOT the end goal of the path.
 		self.targetPos = (state.pacmanLoc.row, state.pacmanLoc.col)
@@ -215,7 +216,9 @@ class DecisionModule:
 			direction = None
 
 			# Perform the decision-making process
-			if absDelta != 1:
+			if self.policy:
+				direction = self.policy.select_action(self.state)
+			elif absDelta != 1:
 				# If we're at the target location, or the target locatipn is somehow unreachable from the current position,
 				# update the target location
 				self.update_target_loc()
@@ -237,9 +240,10 @@ class DecisionModule:
 					# Get the direction to move in
 					direction = direction_from_delta(deltaRow, deltaCol)
 
-					# Update our position on the server.
-					# !TODO: In the future, this needs to be replaced by a call to the low level movement code
-					self.state.queueAction(1, direction)
+			if direction is not None:
+				# Update our position on the server.
+				# !TODO: In the future, this needs to be replaced by a call to the low level movement code
+				self.state.queueAction(1, direction)
 				if self.state.gameMode != GameModes.PAUSED:
 					send_to_teensey(direction)
 				else:
