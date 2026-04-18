@@ -6,8 +6,7 @@ import numpy as np
 import torch
 
 from gameState import GameState, GameModes, Directions
-from debugServer import DebugServer
-from decisionModule import send_to_teensey
+from low_level import send_direction
 
 # Path to the curc-pacbot-rl model definitions
 _RL_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../curc-pacbot-rl/src')
@@ -139,7 +138,7 @@ class DQNDecisionModule:
     # Inference
     # ------------------------------------------------------------------
 
-    def _get_direction(self) -> Directions:
+    def get_direction(self) -> Directions:
         obs = self._build_obs()
         mask = self._get_action_mask()
 
@@ -156,29 +155,42 @@ class DQNDecisionModule:
 
     # ------------------------------------------------------------------
     # Main async loop (same interface as DecisionModule.decisionLoop)
+    # Runs as fast as possible, acting on every new server state update.
+    # Calls send_direction only when the output direction changes.
     # ------------------------------------------------------------------
 
     async def decisionLoop(self) -> None:
+        last_ticks = -1
+        last_direction = Directions.NONE
+
         while self.state.isConnected():
+            # Yield to let the receive loop process incoming messages
+            await asyncio.sleep(0)
+
+            # Only act when a new game state has arrived from the server
+            if self.state.currTicks == last_ticks:
+                continue
+            last_ticks = self.state.currTicks
+
+            if self.state.gameMode == GameModes.PAUSED:
+                continue
+
             if len(self.state.writeServerBuf):
-                await asyncio.sleep(0)
                 continue
 
             self.state.lock()
 
-            direction = self._get_direction()
+            direction = self.get_direction()
 
             if self.log:
-                print(f'[DQN] pacman=({self.state.pacmanLoc.row},{self.state.pacmanLoc.col}) '
-                      f'action={direction.name}')
+                print(f'[DQN] pos=({self.state.pacmanLoc.row},{self.state.pacmanLoc.col}) '
+                      f'dir={direction.name}')
 
             if direction != Directions.NONE:
                 self.state.queueAction(1, direction)
 
-            if self.state.gameMode != GameModes.PAUSED:
-                send_to_teensey(direction)
-            else:
-                send_to_teensey(Directions.NONE)
-
             self.state.unlock()
-            await asyncio.sleep(0.2)
+
+            if direction != last_direction:
+                send_direction(direction)
+                last_direction = direction
